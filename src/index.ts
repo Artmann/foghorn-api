@@ -9,6 +9,7 @@ import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
+import teams from './routes/teams'
 import type { AppVariables, CloudflareBindings } from './types/env'
 
 const app = new Hono<{
@@ -81,6 +82,7 @@ app.get('/', (context) => {
 // Routes.
 app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
+app.route('/teams', teams)
 
 app.get('/openapi', (context) => {
   return context.json(openapiSpec)

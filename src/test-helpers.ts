@@ -5,6 +5,8 @@ import { generateApiKey } from './lib/api-key'
 import { hashPassword } from './lib/crypto'
 import app from './index'
 import { ApiKey } from './models/api-key'
+import { Team } from './models/team'
+import { TeamMember } from './models/team-member'
 import { User } from './models/user'
 import type { CloudflareBindings } from './types/env'
 
@@ -77,6 +79,21 @@ export async function createExpiredToken(
   }
 
   return sign(payload, testJwtSecret, 'HS256')
+}
+
+export async function createTestTeam(
+  userId: string,
+  overrides: { name?: string } = {}
+) {
+  const name = overrides.name ?? `Test Team ${Date.now()}`
+  const team = await Team.create({ name })
+  await TeamMember.create({ teamId: team.id, userId })
+
+  return team
+}
+
+export async function createTestTeamMember(teamId: string, userId: string) {
+  return TeamMember.create({ teamId, userId })
 }
 
 export async function createTestApiKey(
