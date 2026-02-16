@@ -6,6 +6,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { log } from 'tiny-typescript-logger'
 
 import { ApiError } from './lib/api-error'
+import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
 import type { AppVariables, CloudflareBindings } from './types/env'
@@ -49,5 +50,9 @@ app.get('/', (context) => {
 // Routes.
 app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
+
+app.get('/openapi', (context) => {
+  return context.json(openapiSpec)
+})
 
 export default app
