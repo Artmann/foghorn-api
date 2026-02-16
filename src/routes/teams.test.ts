@@ -113,6 +113,26 @@ describe('POST /teams', () => {
 
     expect(response.status).toEqual(400)
   })
+
+  it('returns 409 when user already has 5 teams', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+
+    for (let i = 0; i < 5; i++) {
+      await createTestTeam(user.id, { name: `Team ${i + 1}` })
+    }
+
+    const response = await authenticatedRequest('/teams', {
+      method: 'POST',
+      body: { name: 'Team 6' },
+      token
+    })
+
+    expect(response.status).toEqual(409)
+    expect(await response.json()).toEqual({
+      error: { message: 'You have reached the maximum of 5 teams.' }
+    })
+  })
 })
 
 describe('GET /teams', () => {

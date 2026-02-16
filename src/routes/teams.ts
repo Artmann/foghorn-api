@@ -50,6 +50,11 @@ teams.post('/', jsonValidator(createTeamSchema), async (context) => {
   const auth = context.get('auth')
   const logger = context.get('logger')
 
+  const memberships = await TeamMember.where('userId', auth.userId).get()
+  if (memberships.length >= 5) {
+    throw new ApiError('You have reached the maximum of 5 teams.', 409)
+  }
+
   const team = await Team.create({ name })
   await TeamMember.create({ teamId: team.id, userId: auth.userId })
 
