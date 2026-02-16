@@ -9,18 +9,9 @@ import { Logger } from '../lib/logger'
 import { Page } from '../models/page'
 import { Site } from '../models/site'
 
-program
-  .description('Scrape sitemaps for all sites')
-  .option('--limit <number>', 'maximum number of sites to scrape', '10')
-  .option('--concurrency <number>', 'number of concurrent workers (max 5)', '5')
-  .parse()
+export const MAX_PAGES_PER_SITE = 250
 
-const opts = program.opts()
-const limit = parseInt(opts.limit, 10)
-const concurrency = Math.min(parseInt(opts.concurrency, 10), 5)
-const logger = new Logger(process.env.AXIOM_TOKEN)
-
-async function fetchSitemap(url: string, depth: number = 0): Promise<string[]> {
+export async function fetchSitemap(url: string, depth: number = 0): Promise<string[]> {
   if (depth > 3) {
     return []
   }
@@ -72,12 +63,20 @@ async function fetchSitemap(url: string, depth: number = 0): Promise<string[]> {
   return pages
 }
 
-async function scrapeSite(site: Site): Promise<void> {
+export async function scrapeSite(
+  site: Site,
+  logger: Logger,
+  maxPages = MAX_PAGES_PER_SITE
+): Promise<void> {
   logger.info(`Scraping ${site.domain}${site.sitemapPath}...`)
 
   try {
     const url = `https://${site.domain}${site.sitemapPath}`
-    const pages = await fetchSitemap(url)
+    const allPages = await fetchSitemap(url)
+
+    const existingPages = await Page.where('siteId', site.id).get()
+    const remainingSlots = Math.max(0, maxPages - existingPages.length)
+    const pages = allPages.slice(0, remainingSlots)
 
     for (const pageUrl of pages) {
       const path = new URL(pageUrl).pathname
@@ -107,14 +106,18 @@ async function scrapeSite(site: Site): Promise<void> {
   }
 }
 
-async function runPool(sites: Site[], concurrency: number): Promise<void> {
+async function runPool(
+  sites: Site[],
+  concurrency: number,
+  logger: Logger
+): Promise<void> {
   let index = 0
 
   async function worker(): Promise<void> {
     while (index < sites.length) {
       const site = sites[index++]
 
-      await scrapeSite(site)
+      await scrapeSite(site, logger)
     }
   }
 
@@ -123,47 +126,64 @@ async function runPool(sites: Site[], concurrency: number): Promise<void> {
   )
 }
 
-async function main(): Promise<void> {
-  logger.info(
-    `Fetching up to ${limit} sites to scrape (concurrency: ${concurrency})...`
-  )
+if (import.meta.main) {
+  program
+    .description('Scrape sitemaps for all sites')
+    .option('--limit <number>', 'maximum number of sites to scrape', '10')
+    .option(
+      '--concurrency <number>',
+      'number of concurrent workers (max 5)',
+      '5'
+    )
+    .parse()
 
-  const sites = await Site.all()
+  const opts = program.opts()
+  const limit = parseInt(opts.limit, 10)
+  const concurrency = Math.min(parseInt(opts.concurrency, 10), 5)
+  const logger = new Logger(process.env.AXIOM_TOKEN)
 
-  sites.sort((a, b) => {
-    if (a.lastScrapedSitemapAt === null && b.lastScrapedSitemapAt === null) {
-      return 0
+  async function main(): Promise<void> {
+    logger.info(
+      `Fetching up to ${limit} sites to scrape (concurrency: ${concurrency})...`
+    )
+
+    const sites = await Site.all()
+
+    sites.sort((a, b) => {
+      if (a.lastScrapedSitemapAt === null && b.lastScrapedSitemapAt === null) {
+        return 0
+      }
+      if (a.lastScrapedSitemapAt === null) {
+        return -1
+      }
+      if (b.lastScrapedSitemapAt === null) {
+        return 1
+      }
+      return a.lastScrapedSitemapAt - b.lastScrapedSitemapAt
+    })
+
+    const sitesToScrape = sites.slice(0, limit)
+
+    if (sitesToScrape.length === 0) {
+      logger.info('No sites to scrape.')
+      await connectionHandler.closeConnections()
+      return
     }
-    if (a.lastScrapedSitemapAt === null) {
-      return -1
-    }
-    if (b.lastScrapedSitemapAt === null) {
-      return 1
-    }
-    return a.lastScrapedSitemapAt - b.lastScrapedSitemapAt
-  })
 
-  const sitesToScrape = sites.slice(0, limit)
+    logger.info(`Found ${sitesToScrape.length} sites to scrape.`)
 
-  if (sitesToScrape.length === 0) {
-    logger.info('No sites to scrape.')
+    await runPool(sitesToScrape, concurrency, logger)
+
+    logger.info('Done.')
+
+    await logger.flush()
     await connectionHandler.closeConnections()
-    return
   }
 
-  logger.info(`Found ${sitesToScrape.length} sites to scrape.`)
-
-  await runPool(sitesToScrape, concurrency)
-
-  logger.info('Done.')
-
-  await logger.flush()
-  await connectionHandler.closeConnections()
+  main().catch(async (error) => {
+    logger.error('Fatal error', { error: String(error) })
+    await logger.flush()
+    await connectionHandler.closeConnections()
+    process.exit(1)
+  })
 }
-
-main().catch(async (error) => {
-  logger.error('Fatal error', { error: String(error) })
-  await logger.flush()
-  await connectionHandler.closeConnections()
-  process.exit(1)
-})
