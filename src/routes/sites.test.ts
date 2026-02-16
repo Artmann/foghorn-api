@@ -134,6 +134,27 @@ describe('POST /sites', () => {
 
     expect(response.status).toEqual(403)
   })
+
+  it('returns 409 when team already has 10 sites', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+
+    for (let i = 0; i < 10; i++) {
+      await createTestSite(team.id, { domain: `site-${i}.example.com` })
+    }
+
+    const response = await authenticatedRequest('/sites', {
+      method: 'POST',
+      body: { teamId: team.id, domain: 'one-too-many.example.com' },
+      token
+    })
+
+    expect(response.status).toEqual(409)
+    expect(await response.json()).toEqual({
+      error: { message: 'This team has reached the maximum of 10 sites.' }
+    })
+  })
 })
 
 describe('GET /sites', () => {
