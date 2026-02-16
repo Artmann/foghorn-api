@@ -12,6 +12,7 @@ import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
 import internal from './routes/internal'
+import pages from './routes/pages'
 import sites from './routes/sites'
 import teams from './routes/teams'
 import type { AppVariables, CloudflareBindings } from './types/env'
@@ -97,6 +98,7 @@ app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
 app.route('/internal', internal)
 app.route('/teams', teams)
+app.route('/pages', pages)
 app.route('/sites', sites)
 
 app.get('/openapi', (context) => {

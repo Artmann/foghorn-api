@@ -1025,6 +1025,131 @@ export const openapiSpec = {
         }
       }
     },
+    '/pages': {
+      get: {
+        tags: ['Pages'],
+        summary: 'List pages the user has access to',
+        operationId: 'listPages',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'siteId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description:
+              'Filter pages by site. If omitted, returns pages across all accessible sites.'
+          },
+          {
+            name: 'search',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description:
+              'Case-insensitive search term matched against page URL and path.'
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'List of pages.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    pages: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/PageDto' }
+                    }
+                  },
+                  required: ['pages']
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Site not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/pages/{id}': {
+      get: {
+        tags: ['Pages'],
+        summary: 'Get a single page',
+        operationId: 'getPage',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Page details.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    page: { $ref: '#/components/schemas/PageDto' }
+                  },
+                  required: ['page']
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Page not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      }
+    },
     '/api-keys/{id}': {
       delete: {
         tags: ['API Keys'],
@@ -1171,6 +1296,38 @@ export const openapiSpec = {
           'sitemapPath',
           'lastScrapedSitemapAt',
           'scrapeSitemapError',
+          'createdAt'
+        ]
+      },
+      PageDto: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          siteId: { type: 'string' },
+          path: { type: 'string' },
+          url: { type: 'string' },
+          lastAuditedAt: {
+            type: ['string', 'null'],
+            format: 'date-time'
+          },
+          auditError: {
+            type: ['string', 'null']
+          },
+          auditReport: {
+            type: ['object', 'null'],
+            description:
+              'Full Lighthouse audit report, or null if not yet audited.'
+          },
+          createdAt: { type: 'string', format: 'date-time' }
+        },
+        required: [
+          'id',
+          'siteId',
+          'path',
+          'url',
+          'lastAuditedAt',
+          'auditError',
+          'auditReport',
           'createdAt'
         ]
       },

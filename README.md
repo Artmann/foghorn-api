@@ -206,6 +206,28 @@ Both fields are optional.
 DELETE /sites/:id
 ```
 
+### Pages
+
+All page endpoints require authentication. You must be a member of the page's
+site's team.
+
+#### List pages
+
+```
+GET /pages?siteId=site-id-here&search=keyword
+```
+
+Both query parameters are optional. If `siteId` is provided, returns pages for
+that site. Otherwise, returns pages across all sites you have access to.
+`search` filters pages where the URL or path matches the term
+(case-insensitive).
+
+#### Get a page
+
+```
+GET /pages/:id
+```
+
 ### Other
 
 #### Health check
