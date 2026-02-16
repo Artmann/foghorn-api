@@ -48,6 +48,11 @@ sites.post('/', jsonValidator(createSiteSchema), async (context) => {
 
   await requireTeamMembership(teamId, auth.userId)
 
+  const existingSites = await Site.where('teamId', teamId).get()
+  if (existingSites.length >= 10) {
+    throw new ApiError('This team has reached the maximum of 10 sites.', 409)
+  }
+
   const site = await Site.create({
     teamId,
     domain,
