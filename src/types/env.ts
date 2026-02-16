@@ -14,5 +14,6 @@ export interface CloudflareBindings {
   AXIOM_TOKEN: string
   DB_DATABASE: string
   DB_URL: string
+  INTERNAL_API_KEY: string
   JWT_SECRET: string
 }

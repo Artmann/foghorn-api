@@ -11,6 +11,7 @@ import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
+import internal from './routes/internal'
 import sites from './routes/sites'
 import teams from './routes/teams'
 import type { AppVariables, CloudflareBindings } from './types/env'
@@ -94,6 +95,7 @@ app.get('/', (context) => {
 // Routes.
 app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
+app.route('/internal', internal)
 app.route('/teams', teams)
 app.route('/sites', sites)
 

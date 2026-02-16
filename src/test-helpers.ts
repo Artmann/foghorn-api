@@ -5,6 +5,7 @@ import { generateApiKey } from './lib/api-key'
 import { hashPassword } from './lib/crypto'
 import app from './index'
 import { ApiKey } from './models/api-key'
+import { Page } from './models/page'
 import { Site } from './models/site'
 import { Team } from './models/team'
 import { TeamMember } from './models/team-member'
@@ -20,6 +21,7 @@ export const testEnvironment: CloudflareBindings = {
   AXIOM_TOKEN: 'test-axiom-token',
   DB_DATABASE: 'test-foghorn',
   DB_URL: 'mongodb://127.0.0.1:27017/',
+  INTERNAL_API_KEY: 'test-internal-api-key',
   JWT_SECRET: testJwtSecret
 }
 
@@ -107,6 +109,16 @@ export async function createTestSite(
   const sitemapPath = overrides.sitemapPath ?? '/sitemap.xml'
 
   return Site.create({ teamId, domain, sitemapPath })
+}
+
+export async function createTestPage(
+  siteId: string,
+  overrides: { path?: string; url?: string } = {}
+) {
+  const path = overrides.path ?? '/'
+  const url = overrides.url ?? `https://example.com${path}`
+
+  return Page.create({ siteId, path, url })
 }
 
 export async function createTestApiKey(
