@@ -11,7 +11,10 @@ import { Site } from '../models/site'
 
 export const MAX_PAGES_PER_SITE = 250
 
-export async function fetchSitemap(url: string, depth: number = 0): Promise<string[]> {
+export async function fetchSitemap(
+  url: string,
+  depth: number = 0
+): Promise<string[]> {
   if (depth > 3) {
     return []
   }

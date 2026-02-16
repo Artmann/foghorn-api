@@ -17,7 +17,9 @@
       "Bash(__NEW_LINE_1e12148f3190df75__ curl -s --max-time 5 -X POST http://127.0.0.1:8787/sites -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"teamId\"\":\"\"699395a00c9313aa79e0ce35\"\",\"\"domain\"\":\"\"anthropic.com\"\"}')",
       "Bash(bun run typecheck:*)",
       "Bash(bun run test:run:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
