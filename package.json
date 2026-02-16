@@ -6,6 +6,7 @@
     "deploy": "wrangler deploy --minify",
     "dev": "wrangler dev",
     "format": "prettier --write .",
+    "run-audits": "tsx src/commands/run-audits.ts",
     "scrape-sitemaps": "tsx src/commands/scrape-sitemaps.ts",
     "test": "vitest",
     "test:run": "vitest run",

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:www.debugbear.com)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(curl:*)",
+      "Bash(mongosh:*)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri http://127.0.0.1:8787/ -TimeoutSec 5\")",
+      "Bash(powershell -Command \"Get-Process -Name ''node'',''wrangler'' -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CommandLine | Format-Table -AutoSize\")",
+      "Bash(powershell -Command \"Get-Process -Name ''wrangler'' -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8787 -ErrorAction SilentlyContinue | Select-Object LocalPort,State,OwningProcess | Format-Table\")",
+      "Bash(powershell -Command:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OTkzOTMxM2Q0Nzc2ZmJiYzNiYjlhMWQiLCJlbWFpbCI6InRlc3RAZm9naG9ybi5kZXYiLCJpYXQiOjE3NzEyNzk3NjcsImV4cCI6MTc3MTM2NjE2N30.GuwSoAdS03KiHGjMUAC3YRYmxbHYTddcWd6u2fo-Kng\")",
+      "Bash(__NEW_LINE_1e12148f3190df75__ curl -s --max-time 5 -X POST http://127.0.0.1:8787/sites -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"teamId\"\":\"\"699395a00c9313aa79e0ce35\"\",\"\"domain\"\":\"\"anthropic.com\"\"}')"
+    ]
+  }
+}
