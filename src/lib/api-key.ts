@@ -1,0 +1,43 @@
+const KEY_PREFIX = 'fh_'
+const KEY_LENGTH = 32
+
+function bufferToBase64Url(buffer: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < buffer.byteLength; i++) {
+    binary += String.fromCharCode(buffer[i])
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+export async function sha256(data: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const buffer = encoder.encode(data)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+  const hashArray = new Uint8Array(hashBuffer)
+  return Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+export async function generateApiKey(): Promise<{
+  key: string
+  hash: string
+  prefix: string
+}> {
+  const randomBytes = crypto.getRandomValues(new Uint8Array(KEY_LENGTH))
+  const keyBody = bufferToBase64Url(randomBytes)
+  const fullKey = `${KEY_PREFIX}${keyBody}`
+
+  const hash = await sha256(fullKey)
+  const prefix = fullKey.substring(0, 8)
+
+  return { key: fullKey, hash, prefix }
+}
+
+export async function hashApiKey(key: string): Promise<string> {
+  return sha256(key)
+}
+
+export function isApiKey(token: string): boolean {
+  return token.startsWith(KEY_PREFIX)
+}
