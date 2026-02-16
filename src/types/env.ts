@@ -1,16 +1,12 @@
-export interface CloudflareBindings {
-  JWT_SECRET: string
-  MONGODB_API_KEY: string
-  MONGODB_APP_ID: string
-  MONGODB_CLUSTER: string
-  MONGODB_DATABASE: string
+export interface AppVariables {
+  auth: AuthContext
 }
 
 export interface AuthContext {
-  userId: string
   authType: 'jwt' | 'api-key'
+  userId: string
 }
 
-export interface AppVariables {
-  auth: AuthContext
+export interface CloudflareBindings {
+  JWT_SECRET: string
 }

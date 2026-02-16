@@ -1,39 +1,53 @@
-export interface ApiKey {
-  _id: string
-  name: string
-  keyHash: string
-  keyPrefix: string
-  userId: string
+import { BaseModel } from 'esix'
+import { z } from 'zod'
+
+import { timestampToDateTime } from '../lib/time'
+
+export const createApiKeySchema = z.object({
+  expiresAt: z.string().datetime('Invalid date format.').optional(),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Name is required.')
+    .max(100, 'Name must be 100 characters or less.')
+})
+
+export interface ApiKeyDto {
   createdAt: string
-  lastUsedAt: string | null
-}
-
-export interface CreateApiKeyInput {
-  name: string
-}
-
-export interface ApiKeyResponse {
+  expiresAt: string | null
   id: string
-  name: string
   keyPrefix: string
-  createdAt: string
   lastUsedAt: string | null
+  name: string
 }
 
-export interface CreateApiKeyResponse {
+export interface CreateApiKeyDto {
+  createdAt: string
+  expiresAt: string | null
   id: string
-  name: string
   key: string
   keyPrefix: string
-  createdAt: string
+  name: string
 }
 
-export function toApiKeyResponse(apiKey: ApiKey): ApiKeyResponse {
+export class ApiKey extends BaseModel {
+  public expiresAt: number | null = null
+  public keyHash = ''
+  public keyPrefix = ''
+  public lastUsedAt: number | null = null
+  public name = ''
+  public userId = ''
+}
+
+export function toApiKeyDto(apiKey: ApiKey): ApiKeyDto {
   return {
-    id: apiKey._id,
-    name: apiKey.name,
+    createdAt: timestampToDateTime(apiKey.createdAt),
+    expiresAt: apiKey.expiresAt ? timestampToDateTime(apiKey.expiresAt) : null,
+    id: apiKey.id,
     keyPrefix: apiKey.keyPrefix,
-    createdAt: apiKey.createdAt,
     lastUsedAt: apiKey.lastUsedAt
+      ? timestampToDateTime(apiKey.lastUsedAt)
+      : null,
+    name: apiKey.name
   }
 }

@@ -18,12 +18,12 @@ bun run dev
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Start local development server |
-| `bun run deploy` | Deploy to Cloudflare Workers |
-| `bun run typecheck` | Run TypeScript type checking |
-| `bun run format` | Format code with Prettier |
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `bun run dev`        | Start local development server      |
+| `bun run deploy`     | Deploy to Cloudflare Workers        |
+| `bun run typecheck`  | Run TypeScript type checking        |
+| `bun run format`     | Format code with Prettier           |
 | `bun run cf-typegen` | Generate types from wrangler config |
 
 ## Environment Setup
@@ -42,20 +42,19 @@ bunx wrangler secret put MONGODB_DATABASE
 
 ### Public
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Health check |
-| GET | `/health` | Health check |
-| POST | `/auth/signup` | Create account |
-| POST | `/auth/signin` | Login, returns JWT |
+| Method | Path           | Description        |
+| ------ | -------------- | ------------------ |
+| GET    | `/`            | Health check       |
+| POST   | `/auth/signup` | Create account     |
+| POST   | `/auth/signin` | Login, returns JWT |
 
 ### Protected (Bearer token required)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api-keys` | Create API key |
-| GET | `/api-keys` | List user's API keys |
-| DELETE | `/api-keys/:id` | Delete API key |
+| Method | Path            | Description          |
+| ------ | --------------- | -------------------- |
+| POST   | `/api-keys`     | Create API key       |
+| GET    | `/api-keys`     | List user's API keys |
+| DELETE | `/api-keys/:id` | Delete API key       |
 
 ## Authentication
 
@@ -91,17 +90,4 @@ src/
   routes/
     auth.ts             # Auth endpoints
     api-keys.ts         # API key endpoints
-```
-
-## MongoDB Setup
-
-1. Create a MongoDB Atlas cluster
-2. Enable the Data API in Atlas
-3. Create an API key with read/write access
-4. Create indexes:
-
-```javascript
-db.users.createIndex({ "email": 1 }, { unique: true })
-db.apiKeys.createIndex({ "keyHash": 1 }, { unique: true })
-db.apiKeys.createIndex({ "userId": 1 })
 ```

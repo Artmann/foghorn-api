@@ -1,37 +1,37 @@
-import { Context, MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import { verify } from 'hono/jwt'
-import type { CloudflareBindings, AppVariables } from '../types/env'
-import { createMongoClient } from '../lib/mongodb'
-import { hashApiKey, isApiKey } from '../lib/api-key'
-import type { ApiKey } from '../models/api-key'
 
-type AppContext = Context<{ Bindings: CloudflareBindings; Variables: AppVariables }>
+import { hashApiKey, isApiKey } from '../lib/api-key'
+import { ApiError } from '../lib/api-error'
+import { ApiKey } from '../models/api-key'
+import type { AppVariables, CloudflareBindings } from '../types/env'
+
+type AppContext = Context<{
+  Bindings: CloudflareBindings
+  Variables: AppVariables
+}>
 
 export const authMiddleware = (): MiddlewareHandler<{
   Bindings: CloudflareBindings
   Variables: AppVariables
 }> => {
-  return async (c, next) => {
-    const authHeader = c.req.header('Authorization')
+  return async (context, next) => {
+    const authHeader = context.req.header('Authorization')
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return c.json({ error: 'Missing authorization header' }, 401)
+      throw new ApiError('Missing authorization header.', 401)
     }
 
     const token = authHeader.slice(7)
 
     if (isApiKey(token)) {
-      const result = await authenticateWithApiKey(c as AppContext, token)
-      if (!result.success) {
-        return c.json({ error: result.error }, 401)
-      }
-      c.set('auth', { userId: result.userId, authType: 'api-key' })
+      const userId = await authenticateWithApiKey(context as AppContext, token)
+
+      context.set('auth', { authType: 'api-key', userId })
     } else {
-      const result = await authenticateWithJwt(c as AppContext, token)
-      if (!result.success) {
-        return c.json({ error: result.error }, 401)
-      }
-      c.set('auth', { userId: result.userId, authType: 'jwt' })
+      const userId = await authenticateWithJwt(context as AppContext, token)
+
+      context.set('auth', { authType: 'jwt', userId })
     }
 
     await next()
@@ -39,43 +39,54 @@ export const authMiddleware = (): MiddlewareHandler<{
 }
 
 async function authenticateWithApiKey(
-  c: AppContext,
+  context: AppContext,
   token: string
-): Promise<{ success: true; userId: string } | { success: false; error: string }> {
+): Promise<string> {
   try {
     const keyHash = await hashApiKey(token)
-    const db = createMongoClient(c.env)
-
-    const apiKey = await db.findOne<ApiKey>('apiKeys', { keyHash })
+    const apiKey = await ApiKey.findBy('keyHash', keyHash)
 
     if (!apiKey) {
-      return { success: false, error: 'Invalid API key' }
+      throw new ApiError('Invalid API key.', 401)
     }
 
-    c.executionCtx.waitUntil(
-      db.updateOne('apiKeys', { _id: { $oid: apiKey._id } }, { $set: { lastUsedAt: new Date().toISOString() } })
+    if (apiKey.expiresAt && apiKey.expiresAt < Date.now()) {
+      throw new ApiError('API key has expired.', 401)
+    }
+
+    context.executionCtx.waitUntil(
+      (async () => {
+        apiKey.lastUsedAt = Date.now()
+        await apiKey.save()
+      })()
     )
 
-    return { success: true, userId: apiKey.userId }
-  } catch {
-    return { success: false, error: 'API key authentication failed' }
+    return apiKey.userId
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error
+    }
+    throw new ApiError('API key authentication failed.', 401)
   }
 }
 
 async function authenticateWithJwt(
-  c: AppContext,
+  context: AppContext,
   token: string
-): Promise<{ success: true; userId: string } | { success: false; error: string }> {
+): Promise<string> {
   try {
-    const payload = await verify(token, c.env.JWT_SECRET, 'HS256')
+    const payload = await verify(token, context.env.JWT_SECRET, 'HS256')
     const userId = payload.sub as string
 
     if (!userId) {
-      return { success: false, error: 'Invalid token payload' }
+      throw new ApiError('Invalid token payload.', 401)
     }
 
-    return { success: true, userId }
-  } catch {
-    return { success: false, error: 'Invalid or expired token' }
+    return userId
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error
+    }
+    throw new ApiError('Invalid or expired token.', 401)
   }
 }
