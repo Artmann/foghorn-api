@@ -12,5 +12,7 @@ export interface AuthContext {
 
 export interface CloudflareBindings {
   AXIOM_TOKEN: string
+  DB_DATABASE: string
+  DB_URL: string
   JWT_SECRET: string
 }

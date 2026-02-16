@@ -3,10 +3,11 @@
   "name": "foghorn-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-02-16",
-  "compatibility_flags": ["nodejs_compat"]
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "DB_URL": "mongodb://127.0.0.1:27017/",
+    "DB_DATABASE": "foghorn-api-dev"
+  }
   // "kv_namespaces": [
   //   {
   //     "binding": "MY_KV_NAMESPACE",

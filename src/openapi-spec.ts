@@ -702,6 +702,329 @@ export const openapiSpec = {
         }
       }
     },
+    '/sites': {
+      post: {
+        tags: ['Sites'],
+        summary: 'Create a site for a team',
+        operationId: 'createSite',
+        security: [{ Bearer: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  teamId: { type: 'string' },
+                  domain: { type: 'string', minLength: 1, maxLength: 255 },
+                  sitemapPath: { type: 'string', minLength: 1, maxLength: 255 }
+                },
+                required: ['teamId', 'domain']
+              }
+            }
+          }
+        },
+        responses: {
+          '201': {
+            description: 'Site created.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    site: { $ref: '#/components/schemas/SiteDto' }
+                  },
+                  required: ['site']
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Validation error.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Team not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      },
+      get: {
+        tags: ['Sites'],
+        summary: 'List all sites for a team',
+        operationId: 'listSites',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'teamId',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'List of sites.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sites: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/SiteDto' }
+                    }
+                  },
+                  required: ['sites']
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Missing teamId query parameter.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Team not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/sites/{id}': {
+      get: {
+        tags: ['Sites'],
+        summary: 'Get a single site',
+        operationId: 'getSite',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Site details.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    site: { $ref: '#/components/schemas/SiteDto' }
+                  },
+                  required: ['site']
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Site not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        tags: ['Sites'],
+        summary: 'Update a site',
+        operationId: 'updateSite',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  domain: { type: 'string', minLength: 1, maxLength: 255 },
+                  sitemapPath: { type: 'string', minLength: 1, maxLength: 255 }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': {
+            description: 'Site updated.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    site: { $ref: '#/components/schemas/SiteDto' }
+                  },
+                  required: ['site']
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Validation error.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Site not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        tags: ['Sites'],
+        summary: 'Delete a site',
+        operationId: 'deleteSite',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Site deleted.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' }
+                  },
+                  required: ['success']
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Site not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      }
+    },
     '/api-keys/{id}': {
       delete: {
         tags: ['API Keys'],
@@ -824,6 +1147,32 @@ export const openapiSpec = {
           createdAt: { type: 'string', format: 'date-time' }
         },
         required: ['id', 'teamId', 'userId', 'createdAt']
+      },
+      SiteDto: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          teamId: { type: 'string' },
+          domain: { type: 'string' },
+          sitemapPath: { type: 'string' },
+          lastScrapedSitemapAt: {
+            type: ['string', 'null'],
+            format: 'date-time'
+          },
+          scrapeSitemapError: {
+            type: ['string', 'null']
+          },
+          createdAt: { type: 'string', format: 'date-time' }
+        },
+        required: [
+          'id',
+          'teamId',
+          'domain',
+          'sitemapPath',
+          'lastScrapedSitemapAt',
+          'scrapeSitemapError',
+          'createdAt'
+        ]
       },
       CreateApiKeyDto: {
         type: 'object',

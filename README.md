@@ -2,92 +2,220 @@
 
 API for running and collecting Lighthouse data for your site.
 
-## Tech Stack
-
-- **Runtime**: Cloudflare Workers
-- **Framework**: Hono
-- **Database**: MongoDB Atlas (via Data API)
-- **Auth**: JWT tokens + API keys
-
-## Getting Started
-
-```bash
-bun install
-bun run dev
-```
-
-## Scripts
-
-| Command              | Description                         |
-| -------------------- | ----------------------------------- |
-| `bun run dev`        | Start local development server      |
-| `bun run deploy`     | Deploy to Cloudflare Workers        |
-| `bun run typecheck`  | Run TypeScript type checking        |
-| `bun run format`     | Format code with Prettier           |
-| `bun run cf-typegen` | Generate types from wrangler config |
-
-## Environment Setup
-
-Set secrets via wrangler:
-
-```bash
-bunx wrangler secret put JWT_SECRET
-bunx wrangler secret put MONGODB_API_KEY
-bunx wrangler secret put MONGODB_APP_ID
-bunx wrangler secret put MONGODB_CLUSTER
-bunx wrangler secret put MONGODB_DATABASE
-```
-
-## API Endpoints
-
-### Public
-
-| Method | Path           | Description        |
-| ------ | -------------- | ------------------ |
-| GET    | `/`            | Health check       |
-| POST   | `/auth/signup` | Create account     |
-| POST   | `/auth/signin` | Login, returns JWT |
-
-### Protected (Bearer token required)
-
-| Method | Path            | Description          |
-| ------ | --------------- | -------------------- |
-| POST   | `/api-keys`     | Create API key       |
-| GET    | `/api-keys`     | List user's API keys |
-| DELETE | `/api-keys/:id` | Delete API key       |
-
 ## Authentication
 
 The API supports two authentication methods via Bearer token:
 
-1. **JWT tokens** - Returned from `/auth/signin`, expires in 24 hours
+1. **JWT tokens** - Returned from `/auth/sign-in`, expires in 24 hours
 2. **API keys** - Created via `/api-keys`, prefixed with `fh_`
 
 ```bash
 # Using JWT
-curl -H "Authorization: Bearer <jwt-token>" https://api.example.com/api-keys
+curl -H "Authorization: Bearer <jwt-token>" https://api.example.com/sites
 
 # Using API key
-curl -H "Authorization: Bearer fh_abc123..." https://api.example.com/api-keys
+curl -H "Authorization: Bearer fh_abc123..." https://api.example.com/sites
 ```
 
-## Project Structure
+## Endpoints
+
+### Auth
+
+#### Create an account
 
 ```
-src/
-  index.ts              # Main app entry point
-  types/
-    env.ts              # CloudflareBindings, type definitions
-  models/
-    user.ts             # User model
-    api-key.ts          # API key model
-  lib/
-    mongodb.ts          # MongoDB Atlas Data API client
-    crypto.ts           # Password hashing (PBKDF2)
-    api-key.ts          # API key generation
-  middleware/
-    auth.ts             # JWT + API key auth middleware
-  routes/
-    auth.ts             # Auth endpoints
-    api-keys.ts         # API key endpoints
+POST /auth/sign-up
+```
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+#### Sign in
+
+```
+POST /auth/sign-in
+```
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+Returns a JWT token and its expiry.
+
+### API Keys
+
+All API key endpoints require authentication.
+
+#### Create an API key
+
+```
+POST /api-keys
+```
+
+```json
+{
+  "name": "My Key",
+  "expiresAt": "2025-12-31T00:00:00Z"
+}
+```
+
+`expiresAt` is optional. The full key value is only returned once on creation.
+
+#### List API keys
+
+```
+GET /api-keys
+```
+
+#### Delete an API key
+
+```
+DELETE /api-keys/:id
+```
+
+### Teams
+
+All team endpoints require authentication.
+
+#### Create a team
+
+```
+POST /teams
+```
+
+```json
+{
+  "name": "My Team"
+}
+```
+
+The creator is automatically added as a member.
+
+#### List your teams
+
+```
+GET /teams
+```
+
+#### Get a team
+
+```
+GET /teams/:id
+```
+
+#### Update a team
+
+```
+PUT /teams/:id
+```
+
+```json
+{
+  "name": "New Name"
+}
+```
+
+#### Delete a team
+
+```
+DELETE /teams/:id
+```
+
+#### Add a member
+
+```
+POST /teams/:id/members
+```
+
+```json
+{
+  "userId": "user-id-here"
+}
+```
+
+#### List members
+
+```
+GET /teams/:id/members
+```
+
+#### Remove a member
+
+```
+DELETE /teams/:id/members/:userId
+```
+
+### Sites
+
+All site endpoints require authentication. You must be a member of the site's
+team.
+
+#### Create a site
+
+```
+POST /sites
+```
+
+```json
+{
+  "teamId": "team-id-here",
+  "domain": "www.example.com",
+  "sitemapPath": "/sitemap.xml"
+}
+```
+
+`sitemapPath` is optional and defaults to `/sitemap.xml`.
+
+#### List sites for a team
+
+```
+GET /sites?teamId=team-id-here
+```
+
+#### Get a site
+
+```
+GET /sites/:id
+```
+
+#### Update a site
+
+```
+PUT /sites/:id
+```
+
+```json
+{
+  "domain": "new-domain.com",
+  "sitemapPath": "/custom-sitemap.xml"
+}
+```
+
+Both fields are optional.
+
+#### Delete a site
+
+```
+DELETE /sites/:id
+```
+
+### Other
+
+#### Health check
+
+```
+GET /
+```
+
+#### OpenAPI spec
+
+```
+GET /openapi
 ```

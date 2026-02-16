@@ -4,11 +4,14 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 
+import { connectionHandler } from 'esix'
+
 import { ApiError } from './lib/api-error'
 import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
+import sites from './routes/sites'
 import teams from './routes/teams'
 import type { AppVariables, CloudflareBindings } from './types/env'
 
@@ -16,6 +19,15 @@ const app = new Hono<{
   Bindings: CloudflareBindings
   Variables: AppVariables
 }>()
+
+// Bridge Cloudflare env bindings into process.env for libraries that depend on it (e.g. esix).
+// Close stale DB connections so each request gets a fresh connection in the Workers runtime.
+app.use('*', async (context, next) => {
+  process.env.DB_URL = context.env.DB_URL
+  process.env.DB_DATABASE = context.env.DB_DATABASE
+  await connectionHandler.closeConnections()
+  await next()
+})
 
 // Global middleware.
 app.use('*', logger())
@@ -83,6 +95,7 @@ app.get('/', (context) => {
 app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
 app.route('/teams', teams)
+app.route('/sites', sites)
 
 app.get('/openapi', (context) => {
   return context.json(openapiSpec)

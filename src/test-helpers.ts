@@ -5,6 +5,7 @@ import { generateApiKey } from './lib/api-key'
 import { hashPassword } from './lib/crypto'
 import app from './index'
 import { ApiKey } from './models/api-key'
+import { Site } from './models/site'
 import { Team } from './models/team'
 import { TeamMember } from './models/team-member'
 import { User } from './models/user'
@@ -17,6 +18,8 @@ export const testJwtSecret =
 
 export const testEnvironment: CloudflareBindings = {
   AXIOM_TOKEN: 'test-axiom-token',
+  DB_DATABASE: 'test-foghorn',
+  DB_URL: 'mongodb://127.0.0.1:27017/',
   JWT_SECRET: testJwtSecret
 }
 
@@ -94,6 +97,16 @@ export async function createTestTeam(
 
 export async function createTestTeamMember(teamId: string, userId: string) {
   return TeamMember.create({ teamId, userId })
+}
+
+export async function createTestSite(
+  teamId: string,
+  overrides: { domain?: string; sitemapPath?: string } = {}
+) {
+  const domain = overrides.domain ?? `test-${Date.now()}.example.com`
+  const sitemapPath = overrides.sitemapPath ?? '/sitemap.xml'
+
+  return Site.create({ teamId, domain, sitemapPath })
 }
 
 export async function createTestApiKey(
