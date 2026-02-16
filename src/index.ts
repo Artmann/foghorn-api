@@ -3,9 +3,9 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
-import { log } from 'tiny-typescript-logger'
 
 import { ApiError } from './lib/api-error'
+import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
@@ -21,6 +21,32 @@ app.use('*', logger())
 app.use('*', secureHeaders())
 app.use('*', cors())
 
+// Logger middleware.
+app.use('*', async (context, next) => {
+  const log = new Logger(context.env.AXIOM_TOKEN)
+  context.set('logger', log)
+  const start = Date.now()
+
+  await next()
+
+  const duration = Date.now() - start
+  const level =
+    context.res.status >= 500
+      ? 'error'
+      : context.res.status >= 400
+        ? 'warn'
+        : 'info'
+
+  log[level]('HTTP request', {
+    method: context.req.method,
+    path: context.req.path,
+    status: context.res.status,
+    duration
+  })
+
+  context.executionCtx.waitUntil(log.flush())
+})
+
 // Error handling.
 app.onError((error, context) => {
   if (error instanceof ApiError) {
@@ -30,7 +56,12 @@ app.onError((error, context) => {
     )
   }
 
-  log.error(error)
+  const log = new Logger(context.env.AXIOM_TOKEN)
+  log.error(error.message, {
+    method: context.req.method,
+    path: context.req.path
+  })
+  context.executionCtx.waitUntil(log.flush())
 
   return context.json(
     {

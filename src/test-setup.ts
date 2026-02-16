@@ -9,3 +9,10 @@ vi.mock('tiny-typescript-logger', () => ({
     debug: vi.fn()
   }
 }))
+
+vi.mock('@axiomhq/js', () => ({
+  Axiom: class {
+    ingest = vi.fn()
+    flush = vi.fn().mockResolvedValue(undefined)
+  }
+}))

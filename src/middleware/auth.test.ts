@@ -164,7 +164,7 @@ describe('API key authentication', () => {
 
     await apiKeysRequest(key)
 
-    expect(mockExecutionContext.waitUntil).toHaveBeenCalledOnce()
+    expect(mockExecutionContext.waitUntil).toHaveBeenCalledTimes(2)
   })
 
   it('updates lastUsedAt via waitUntil promise', async () => {

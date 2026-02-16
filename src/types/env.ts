@@ -1,5 +1,8 @@
+import type { Logger } from '../lib/logger'
+
 export interface AppVariables {
   auth: AuthContext
+  logger: Logger
 }
 
 export interface AuthContext {
@@ -8,5 +11,6 @@ export interface AuthContext {
 }
 
 export interface CloudflareBindings {
+  AXIOM_TOKEN: string
   JWT_SECRET: string
 }

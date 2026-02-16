@@ -17,9 +17,11 @@ const auth = new Hono<{
 auth.post('/sign-up', jsonValidator(signupSchema), async (context) => {
   const { email, password } = context.req.valid('json')
 
+  const logger = context.get('logger')
   const existingUser = await User.findBy('email', email)
 
   if (existingUser) {
+    logger.warn('Sign-up email conflict', { email })
     throw new ApiError('Email already registered.', 409)
   }
 
@@ -27,15 +29,19 @@ auth.post('/sign-up', jsonValidator(signupSchema), async (context) => {
     await hashPassword(password)
   const user = await User.create({ email, passwordHash, passwordSalt })
 
+  logger.info('User signed up', { email })
+
   return context.json({ user: toUserDto(user) }, 201)
 })
 
 auth.post('/sign-in', jsonValidator(signinSchema), async (context) => {
   const { email, password } = context.req.valid('json')
+  const logger = context.get('logger')
 
   const user = await User.findBy('email', email)
 
   if (!user) {
+    logger.warn('Sign-in invalid credentials', { email })
     throw new ApiError('Invalid credentials.', 401)
   }
 
@@ -46,6 +52,7 @@ auth.post('/sign-in', jsonValidator(signinSchema), async (context) => {
   )
 
   if (!isValid) {
+    logger.warn('Sign-in invalid credentials', { email })
     throw new ApiError('Invalid credentials.', 401)
   }
 
@@ -58,6 +65,8 @@ auth.post('/sign-in', jsonValidator(signinSchema), async (context) => {
   }
 
   const token = await sign(payload, context.env.JWT_SECRET, 'HS256')
+
+  logger.info('User signed in', { email, userId: user.id })
 
   return context.json({
     expiresIn: jwtExpirySeconds,

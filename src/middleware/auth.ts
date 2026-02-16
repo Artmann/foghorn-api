@@ -47,10 +47,16 @@ async function authenticateWithApiKey(
     const apiKey = await ApiKey.findBy('keyHash', keyHash)
 
     if (!apiKey) {
+      const logger = context.get('logger')
+      logger.warn('API key auth failed (not found)')
       throw new ApiError('Invalid API key.', 401)
     }
 
     if (apiKey.expiresAt && apiKey.expiresAt < Date.now()) {
+      const logger = context.get('logger')
+      logger.warn('API key auth failed (expired)', {
+        keyPrefix: apiKey.keyPrefix
+      })
       throw new ApiError('API key has expired.', 401)
     }
 
@@ -87,6 +93,8 @@ async function authenticateWithJwt(
     if (error instanceof ApiError) {
       throw error
     }
+    const logger = context.get('logger')
+    logger.warn('JWT auth failed')
     throw new ApiError('Invalid or expired token.', 401)
   }
 }

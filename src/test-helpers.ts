@@ -14,6 +14,7 @@ export const testJwtSecret =
   'test-jwt-secret-that-is-long-enough-for-hs256-signing'
 
 export const testEnvironment: CloudflareBindings = {
+  AXIOM_TOKEN: 'test-axiom-token',
   JWT_SECRET: testJwtSecret
 }
 
