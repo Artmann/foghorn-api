@@ -7,7 +7,7 @@ description: >
 metadata:
   author: artgaard
   version: "1.0"
-allowed-tools: Bash(curl:*)
+allowed-tools: Bash(curl:*foghorn-api.artgaard.workers.dev*), Read, Write
 ---
 
 # Lighthouse Audit Skill
@@ -22,16 +22,21 @@ Foghorn is a site-health monitoring service built on Lighthouse. You register a 
 
 ## Authentication
 
-All endpoints (except sign-up, sign-in, and health check) require a Bearer token in the `Authorization` header. Two token types are supported:
+All endpoints (except sign-up, sign-in, and health check) require a Bearer token in the `Authorization` header.
 
-| Type | Format | Lifetime |
-|------|--------|----------|
-| JWT | `eyJ...` | 24 hours |
-| API Key | `fh_...` | Optional expiry (or never) |
+### Step 1 — Check for a stored API key
 
-**For agent use, prefer API keys** — they don't expire in 24 hours and can be scoped per integration.
+Read `~/.foghorn`. If the file exists and its contents start with `fh_`, you already have a valid API key. Set the auth header and skip to [Setup Workflow](#setup-workflow):
 
-### Sign up (first time only)
+```
+AUTH="Authorization: Bearer <key from ~/.foghorn>"
+```
+
+### Step 2 — First-time setup (only if `~/.foghorn` is missing or empty)
+
+If no stored key is found, ask the user for their email and password, then run through sign-up, sign-in, and key creation.
+
+#### Sign up (first time only)
 
 ```bash
 curl -s -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-up \
@@ -39,7 +44,7 @@ curl -s -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-up \
   -d '{"email":"you@example.com","password":"min8chars"}'
 ```
 
-### Sign in (get a JWT)
+#### Sign in (get a JWT)
 
 ```bash
 curl -s -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-in \
@@ -49,7 +54,7 @@ curl -s -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-in \
 
 Returns `{ "token": "eyJ...", "expiresIn": 86400, "user": {...} }`.
 
-### Create an API key (recommended)
+#### Create an API key
 
 ```bash
 curl -s -X POST https://foghorn-api.artgaard.workers.dev/api-keys \
@@ -58,12 +63,14 @@ curl -s -X POST https://foghorn-api.artgaard.workers.dev/api-keys \
   -d '{"name":"my-agent-key"}'
 ```
 
-Returns the full key **once** in `apiKey.key`. Store it — it cannot be retrieved again.
+Returns the full key **once** in `apiKey.key`.
 
-From here on, use the API key as the Bearer token:
+#### Save the key
 
-```bash
-AUTH="Authorization: Bearer fh_your_key_here"
+Write the `fh_...` key to `~/.foghorn` so it is reused in future sessions. Then set the auth header:
+
+```
+AUTH="Authorization: Bearer <key>"
 ```
 
 ## Setup Workflow
