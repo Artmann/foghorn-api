@@ -25,7 +25,10 @@
       "Bash(python3:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(gh api:*)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(bun test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git push:*)"
     ]
   }
 }
