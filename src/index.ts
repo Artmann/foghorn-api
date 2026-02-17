@@ -13,6 +13,7 @@ import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
 import internal from './routes/internal'
+import issues from './routes/issues'
 import pages from './routes/pages'
 import sites from './routes/sites'
 import teams from './routes/teams'
@@ -68,6 +69,7 @@ app.use('/auth/*', rateLimiter({ max: 10, windowMs: 60_000 }))
 app.use('/teams/*', rateLimiter({ max: 60, windowMs: 60_000 }))
 app.use('/sites/*', rateLimiter({ max: 60, windowMs: 60_000 }))
 app.use('/pages/*', rateLimiter({ max: 60, windowMs: 60_000 }))
+app.use('/issues/*', rateLimiter({ max: 60, windowMs: 60_000 }))
 app.use('/api-keys/*', rateLimiter({ max: 60, windowMs: 60_000 }))
 
 // Error handling.
@@ -106,6 +108,7 @@ app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
 app.route('/internal', internal)
 app.route('/teams', teams)
+app.route('/issues', issues)
 app.route('/pages', pages)
 app.route('/sites', sites)
 
