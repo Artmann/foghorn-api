@@ -348,8 +348,7 @@ Add a site to a team. Max 10 sites per team.
     "teamId": "string",
     "domain": "string",
     "sitemapPath": "string",
-    "lastScrapedSitemapAt": "ISO 8601 | null",
-    "scrapeSitemapError": "string | null",
+    "hasScrapedTheSitemap": false,
     "createdAt": "ISO 8601"
   }
 }
@@ -379,8 +378,7 @@ List sites. Optionally filter by team.
       "teamId": "string",
       "domain": "string",
       "sitemapPath": "string",
-      "lastScrapedSitemapAt": "ISO 8601 | null",
-      "scrapeSitemapError": "string | null",
+      "hasScrapedTheSitemap": false,
       "createdAt": "ISO 8601"
     }
   ]
@@ -470,7 +468,6 @@ List pages. Optionally filter by site and search by URL/path.
       "path": "string",
       "url": "string",
       "lastAuditedAt": "ISO 8601 | null",
-      "auditError": "string | null",
       "auditReport": "PageAuditReport | null",
       "createdAt": "ISO 8601"
     }
@@ -494,7 +491,6 @@ Get a single page with its full audit report.
     "path": "string",
     "url": "string",
     "lastAuditedAt": "ISO 8601 | null",
-    "auditError": "string | null",
     "auditReport": {
       "fetchTime": "ISO 8601",
       "finalUrl": "string",

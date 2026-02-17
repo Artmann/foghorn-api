@@ -1359,13 +1359,7 @@ export const openapiSpec = {
           teamId: { type: 'string' },
           domain: { type: 'string' },
           sitemapPath: { type: 'string' },
-          lastScrapedSitemapAt: {
-            type: ['string', 'null'],
-            format: 'date-time'
-          },
-          scrapeSitemapError: {
-            type: ['string', 'null']
-          },
+          hasScrapedTheSitemap: { type: 'boolean' },
           createdAt: { type: 'string', format: 'date-time' }
         },
         required: [
@@ -1373,8 +1367,7 @@ export const openapiSpec = {
           'teamId',
           'domain',
           'sitemapPath',
-          'lastScrapedSitemapAt',
-          'scrapeSitemapError',
+          'hasScrapedTheSitemap',
           'createdAt'
         ]
       },
@@ -1389,9 +1382,6 @@ export const openapiSpec = {
             type: ['string', 'null'],
             format: 'date-time'
           },
-          auditError: {
-            type: ['string', 'null']
-          },
           auditReport: {
             type: ['object', 'null'],
             description:
@@ -1405,7 +1395,6 @@ export const openapiSpec = {
           'path',
           'url',
           'lastAuditedAt',
-          'auditError',
           'auditReport',
           'createdAt'
         ]

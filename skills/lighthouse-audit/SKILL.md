@@ -106,7 +106,7 @@ curl -s https://foghorn-api.artgaard.workers.dev/sites/SITE_ID \
   -H "$AUTH"
 ```
 
-When `lastScrapedSitemapAt` is non-null, the sitemap has been processed. Then check pages:
+When `hasScrapedTheSitemap` is `true`, the sitemap has been processed. Then check pages:
 
 ```bash
 curl -s "https://foghorn-api.artgaard.workers.dev/pages?siteId=SITE_ID" \

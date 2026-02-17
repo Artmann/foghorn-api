@@ -36,9 +36,8 @@ export const updateSiteSchema = z.object({
 export interface SiteDto {
   createdAt: string
   domain: string
+  hasScrapedTheSitemap: boolean
   id: string
-  lastScrapedSitemapAt: string | null
-  scrapeSitemapError: string | null
   sitemapPath: string
   teamId: string
 }
@@ -55,11 +54,8 @@ export function toSiteDto(site: Site): SiteDto {
   return {
     createdAt: timestampToDateTime(site.createdAt),
     domain: site.domain,
+    hasScrapedTheSitemap: site.lastScrapedSitemapAt !== null,
     id: site.id,
-    lastScrapedSitemapAt: site.lastScrapedSitemapAt
-      ? timestampToDateTime(site.lastScrapedSitemapAt)
-      : null,
-    scrapeSitemapError: site.scrapeSitemapError,
     sitemapPath: site.sitemapPath,
     teamId: site.teamId
   }

@@ -46,9 +46,8 @@ describe('POST /sites', () => {
       site: {
         createdAt: expect.any(String),
         domain: 'www.bitesized.app',
+        hasScrapedTheSitemap: false,
         id: expect.any(String),
-        lastScrapedSitemapAt: null,
-        scrapeSitemapError: null,
         sitemapPath: '/sitemap.xml',
         teamId: team.id
       }
@@ -266,9 +265,8 @@ describe('GET /sites/:id', () => {
       site: {
         createdAt: expect.any(String),
         domain: 'example.com',
+        hasScrapedTheSitemap: false,
         id: site.id,
-        lastScrapedSitemapAt: null,
-        scrapeSitemapError: null,
         sitemapPath: '/sitemap.xml',
         teamId: team.id
       }

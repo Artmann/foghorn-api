@@ -45,7 +45,6 @@ export interface PageDto {
   path: string
   url: string
   lastAuditedAt: string | null
-  auditError: string | null
   auditReport: PageAuditReport | null
 }
 
@@ -68,7 +67,6 @@ export function toPageDto(page: Page): PageDto {
     lastAuditedAt: page.lastAuditedAt
       ? timestampToDateTime(page.lastAuditedAt)
       : null,
-    auditError: page.auditError,
     auditReport: page.auditReport
   }
 }
