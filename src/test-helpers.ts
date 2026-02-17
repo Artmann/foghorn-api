@@ -2,6 +2,7 @@ import { connectionHandler } from 'esix'
 import { sign } from 'hono/jwt'
 
 import { generateApiKey } from './lib/api-key'
+import { resetRateLimiter } from './middleware/rate-limit'
 import { hashPassword } from './lib/crypto'
 import app from './index'
 import { ApiKey } from './models/api-key'
@@ -39,6 +40,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   mockExecutionContext.waitUntil.mockReset()
   mockExecutionContext.passThroughOnException.mockReset()
+  resetRateLimiter()
 })
 
 export async function createTestUser(

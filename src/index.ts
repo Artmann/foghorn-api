@@ -7,6 +7,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { connectionHandler } from 'esix'
 
 import { ApiError } from './lib/api-error'
+import { rateLimiter } from './middleware/rate-limit'
 import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
@@ -61,6 +62,13 @@ app.use('*', async (context, next) => {
 
   context.executionCtx.waitUntil(log.flush())
 })
+
+// Rate limiting.
+app.use('/auth/*', rateLimiter({ max: 10, windowMs: 60_000 }))
+app.use('/teams/*', rateLimiter({ max: 60, windowMs: 60_000 }))
+app.use('/sites/*', rateLimiter({ max: 60, windowMs: 60_000 }))
+app.use('/pages/*', rateLimiter({ max: 60, windowMs: 60_000 }))
+app.use('/api-keys/*', rateLimiter({ max: 60, windowMs: 60_000 }))
 
 // Error handling.
 app.onError((error, context) => {
