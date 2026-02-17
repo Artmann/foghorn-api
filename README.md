@@ -1,6 +1,69 @@
 # Foghorn API
 
-API for running and collecting Lighthouse data for your site.
+Foghorn finds performance, accessibility, and SEO issues across your entire site
+— automatically. Point it at a domain, and it crawls every page, runs Lighthouse
+audits, and reports what needs fixing. Use the REST API directly from your AI
+agent to monitor site health and act on issues without leaving the loop.
+
+## Getting Started
+
+Walk through the end-to-end flow: create an account, set up a team, add a site,
+and check for issues.
+
+### 1. Sign up
+
+```bash
+curl -X POST https://api.example.com/auth/sign-up \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepassword"}'
+```
+
+Creates your account and returns your user ID.
+
+### 2. Sign in
+
+```bash
+curl -X POST https://api.example.com/auth/sign-in \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepassword"}'
+```
+
+Returns a JWT `token` (valid for 24 hours). Use it as a Bearer token in all
+subsequent requests.
+
+### 3. Create a team
+
+```bash
+curl -X POST https://api.example.com/teams \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Team"}'
+```
+
+Returns the team object including its `id`. You are automatically added as a
+member.
+
+### 4. Add a site
+
+```bash
+curl -X POST https://api.example.com/sites \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"teamId": "<team-id>", "domain": "www.example.com"}'
+```
+
+Returns the site object including its `id`. Foghorn will begin crawling the
+sitemap and running Lighthouse audits.
+
+### 5. List issues
+
+```bash
+curl https://api.example.com/issues?siteId=<site-id> \
+  -H "Authorization: Bearer <token>"
+```
+
+Returns audit failures grouped by audit ID, sorted by the number of affected
+pages. Each issue includes the list of pages where the audit fails.
 
 ## Authentication
 
