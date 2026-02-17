@@ -7,6 +7,21 @@ agent to monitor site health and act on issues without leaving the loop.
 
 ## Getting Started
 
+### Use from an agent
+
+Install the Foghorn skill to use the API directly from Claude Code, Cursor,
+Gemini CLI, or any agent that supports the [Agent Skills](https://agentskills.io)
+spec:
+
+```bash
+npx skills add https://github.com/artmann/foghorn-api
+```
+
+Once installed, ask your agent to check a site's performance and it will handle
+authentication, setup, and issue retrieval for you.
+
+### Manual setup
+
 Walk through the end-to-end flow: create an account, set up a team, add a site,
 and check for issues.
 
