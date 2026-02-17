@@ -1025,6 +1025,85 @@ export const openapiSpec = {
         }
       }
     },
+    '/issues': {
+      get: {
+        tags: ['Issues'],
+        summary: 'List audit issues across pages',
+        operationId: 'listIssues',
+        security: [{ Bearer: [] }],
+        parameters: [
+          {
+            name: 'siteId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description:
+              'Filter issues by site. If omitted, returns issues across all accessible sites.'
+          },
+          {
+            name: 'category',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['performance', 'accessibility', 'bestPractices', 'seo']
+            },
+            description: 'Filter issues to a single Lighthouse category.'
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'List of issues.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    issues: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/IssueDto' }
+                    }
+                  },
+                  required: ['issues']
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid category value.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '403': {
+            description: 'Not a member of this team.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          },
+          '404': {
+            description: 'Site not found.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' }
+              }
+            }
+          }
+        }
+      }
+    },
     '/pages': {
       get: {
         tags: ['Pages'],
@@ -1330,6 +1409,33 @@ export const openapiSpec = {
           'auditReport',
           'createdAt'
         ]
+      },
+      IssuePageDto: {
+        type: 'object',
+        properties: {
+          pageId: { type: 'string' },
+          url: { type: 'string' },
+          path: { type: 'string' },
+          score: { type: 'number' },
+          displayValue: { type: ['string', 'null'] }
+        },
+        required: ['pageId', 'url', 'path', 'score', 'displayValue']
+      },
+      IssueDto: {
+        type: 'object',
+        properties: {
+          auditId: { type: 'string' },
+          title: { type: 'string' },
+          category: {
+            type: 'string',
+            enum: ['performance', 'accessibility', 'bestPractices', 'seo']
+          },
+          pages: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/IssuePageDto' }
+          }
+        },
+        required: ['auditId', 'title', 'category', 'pages']
       },
       CreateApiKeyDto: {
         type: 'object',

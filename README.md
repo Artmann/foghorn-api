@@ -228,6 +228,25 @@ that site. Otherwise, returns pages across all sites you have access to.
 GET /pages/:id
 ```
 
+### Issues
+
+All issue endpoints require authentication.
+
+#### List issues
+
+```
+GET /issues?siteId=site-id-here&category=accessibility
+```
+
+Both query parameters are optional. If `siteId` is provided, returns issues for
+that site. Otherwise, returns issues across all sites you have access to.
+`category` filters to a single Lighthouse category: `performance`,
+`accessibility`, `bestPractices`, or `seo`.
+
+Returns audit failures grouped by audit ID across all pages. Each issue includes
+the list of pages where the audit fails, sorted by score ascending (worst
+first). Issues are sorted by number of affected pages descending.
+
 ### Other
 
 #### Health check
