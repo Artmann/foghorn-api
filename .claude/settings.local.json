@@ -22,7 +22,10 @@
       "Bash(git commit:*)",
       "Bash(find:*)",
       "Bash(openssl rand:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api:*)",
+      "Bash(ln:*)"
     ]
   }
 }

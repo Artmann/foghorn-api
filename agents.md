@@ -121,12 +121,17 @@ All secrets set via `wrangler secret put`:
 3. Access user via `c.get('auth').userId`
 4. Mount in `src/index.ts`
 5. Update the OpenAPI spec in `src/openapi-spec.ts` to document the new endpoint
+6. Update the README to reflect the new endpoint
+7. Update the skill files in `skills/` to document the new endpoint
 
 ### Editing an existing endpoint
 
 When changing request bodies, response shapes, status codes, or URL paths of an
-existing endpoint, update the corresponding entry in `src/openapi-spec.ts` to
-keep the spec in sync. The spec is served at `GET /openapi`.
+existing endpoint, you **must** update all of the following to keep them in sync:
+
+1. The OpenAPI spec in `src/openapi-spec.ts` (served at `GET /openapi`)
+2. The README
+3. The skill files in `skills/` (both `SKILL.md` and `references/api-reference.md`)
 
 ### Adding a new model
 
