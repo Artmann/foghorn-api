@@ -13,7 +13,7 @@ and check for issues.
 ### 1. Sign up
 
 ```bash
-curl -X POST https://api.example.com/auth/sign-up \
+curl -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-up \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com", "password": "securepassword"}'
 ```
@@ -23,7 +23,7 @@ Creates your account and returns your user ID.
 ### 2. Sign in
 
 ```bash
-curl -X POST https://api.example.com/auth/sign-in \
+curl -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-in \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com", "password": "securepassword"}'
 ```
@@ -34,7 +34,7 @@ subsequent requests.
 ### 3. Create a team
 
 ```bash
-curl -X POST https://api.example.com/teams \
+curl -X POST https://foghorn-api.artgaard.workers.dev/teams \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Team"}'
@@ -46,7 +46,7 @@ member.
 ### 4. Add a site
 
 ```bash
-curl -X POST https://api.example.com/sites \
+curl -X POST https://foghorn-api.artgaard.workers.dev/sites \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"teamId": "<team-id>", "domain": "www.example.com"}'
@@ -58,7 +58,7 @@ sitemap and running Lighthouse audits.
 ### 5. List issues
 
 ```bash
-curl https://api.example.com/issues?siteId=<site-id> \
+curl https://foghorn-api.artgaard.workers.dev/issues?siteId=<site-id> \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -74,10 +74,10 @@ The API supports two authentication methods via Bearer token:
 
 ```bash
 # Using JWT
-curl -H "Authorization: Bearer <jwt-token>" https://api.example.com/sites
+curl -H "Authorization: Bearer <jwt-token>" https://foghorn-api.artgaard.workers.dev/sites
 
 # Using API key
-curl -H "Authorization: Bearer fh_abc123..." https://api.example.com/sites
+curl -H "Authorization: Bearer fh_abc123..." https://foghorn-api.artgaard.workers.dev/sites
 ```
 
 ## Endpoints
