@@ -20,7 +20,8 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(openssl rand:*)"
     ]
   }
 }
