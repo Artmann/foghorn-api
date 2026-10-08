@@ -1,6 +1,7 @@
-import { connectionHandler } from 'esix'
+import { Context } from 'effect'
 
 import { makeApp } from './http/app'
+import { DatabaseConnection, makeDatabaseConnection } from './services/database'
 import { flushLogs } from './services/logging'
 import type { CloudflareBindings } from './types/env'
 
@@ -16,14 +17,17 @@ export default {
   ): Promise<Response> {
     app ??= makeApp({ ...env })
 
+    // Workers can't reuse a socket across requests, so each request opens its
+    // own database connection and closes it before the request ends.
+    const connection = makeDatabaseConnection()
+
     try {
-      return await app.handler(request)
-    } finally {
-      // Workers can't reuse a socket across requests, so each request closes
-      // the connection it opened before it ends.
-      context.waitUntil(
-        Promise.all([connectionHandler.closeConnections(), flushLogs()])
+      return await app.handler(
+        request,
+        Context.make(DatabaseConnection, connection)
       )
+    } finally {
+      context.waitUntil(Promise.all([connection.close(), flushLogs()]))
     }
   }
 }

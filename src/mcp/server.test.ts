@@ -1,3 +1,4 @@
+import { connectionHandler } from 'esix'
 import { describe, expect, it } from 'vitest'
 
 import { Page } from '../models/page'
@@ -291,6 +292,23 @@ describe('MCP endpoint', () => {
         url: 'https://example.com/waiting'
       }
     ])
+  })
+
+  it("runs tools on the request's own database connection", async () => {
+    const { token, user } = await setupUser()
+    await createTestTeam(user.id)
+    const { callTool } = await connect(token)
+
+    // The global handler's `getConnection` is replaced, so this only counts
+    // connections opened for requests.
+    const prototype = Object.getPrototypeOf(
+      connectionHandler
+    ) as typeof connectionHandler
+    const openConnection = vi.spyOn(prototype, 'getConnection')
+
+    await callTool('list_teams')
+
+    expect(openConnection).toHaveBeenCalledTimes(1)
   })
 
   it('acts as the user of each request, not of the session', async () => {

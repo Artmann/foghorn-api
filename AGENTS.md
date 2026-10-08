@@ -29,8 +29,11 @@ Read those instead of relying on memory: Effect 4 differs a lot from Effect 3
 - **Services**: `Context.Service` classes with a static `layer` in
   `src/services/`. Handlers and jobs only talk to services.
 - **Database**: MongoDB through Esix and the native driver, wrapped by the
-  `Database` service. The Worker closes its connection at the end of each
-  request (`src/index.ts`), because Workers can't reuse sockets across requests.
+  `Database` service. Workers can't use a socket another request opened, so each
+  Worker request gets its own client (`DatabaseConnection`, created in
+  `src/index.ts` and closed when the request ends). `Database.use` points Esix's
+  global `connectionHandler` at it through `AsyncLocalStorage`, so always run
+  Esix calls inside `Database.use`. The job runner uses Esix's global client.
 - **Auth**: Bearer tokens. JWTs (`src/lib/jwt.ts`) for users, `fh_` API keys for
   programmatic access. See the `Authentication` middleware.
 - **Audits**: Google PageSpeed Insights API, mobile strategy, all four
@@ -104,8 +107,8 @@ skills/lighthouse-audit/ # Agent skill for using the API
 - Each audit and scrape runs uninterruptibly, so stopping the runner lets
   in-flight work finish. The heartbeat is released by a scope finalizer.
 - Esix strips `$` operators from queries. Range and `$ne` queries go through
-  `connectionHandler.getConnection()` and the collection directly. Esix stores
-  `_id` as a hex string.
+  `Database.collection()` and the native collection. Esix stores `_id` as a hex
+  string.
 - When PageSpeed returns 429, the page is released (left pending) and the runner
   pauses audits instead of marking pages as failed.
 - The runner records a heartbeat in the `job-runners` collection. `GET /` shows

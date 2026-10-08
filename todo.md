@@ -17,13 +17,12 @@
 
 ### Database connections on Workers
 
-- [ ] Use a MongoDB client per request in the Worker. Esix shares one global
-      client, so concurrent requests in the same isolate use each other's
-      sockets. Under parallel load some requests fail with a 500 (in testing, 6
-      of 30). The Hono version had the same problem and also hung for 80
-      seconds. Options: create the client per request inside the `Database`
-      service (would mean replacing Esix in the Worker), or put an HTTP data
-      layer in front of MongoDB.
+- [ ] Each Worker request opens a new MongoDB connection, which adds a TLS
+      handshake to every request. If latency becomes a problem, look at
+      Cloudflare Hyperdrive (when it supports MongoDB) or an HTTP data layer.
+- [ ] Add per-request connection support to Esix itself (for example
+      `connectionHandler.run(client, callback)`), so `src/services/database.ts`
+      doesn't need to replace `connectionHandler.getConnection`.
 
 ### Effect follow-ups
 
@@ -132,3 +131,7 @@
 - [x] Remote MCP server at `/mcp` on the Worker, with API key or JWT auth and
       tools for teams, sites, issues and pages, built on the same services as
       the REST API.
+- [x] A MongoDB client per Worker request, so concurrent requests no longer
+      share sockets and fail.
+- [x] Fix Worker request logs, which skipped the JSON and Axiom loggers and
+      ignored `LOG_LEVEL`.

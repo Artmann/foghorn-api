@@ -45,12 +45,13 @@ const AppLive = Layer.mergeAll(
 ).pipe(Layer.provide(ServicesLive), Layer.provide(HttpServer.layerServices))
 
 // Builds a fetch handler. `env` is where config is read from: the Worker
-// bindings in production, or a plain object in tests.
+// bindings in production, or a plain object in tests. The logging layer is
+// merged in, not just provided, so request handlers use it too.
 export function makeApp(env: Record<string, unknown>) {
   const ConfigLive = ConfigProvider.layer(ConfigProvider.fromUnknown(env))
 
   return HttpRouter.toWebHandler(
-    AppLive.pipe(Layer.provide(LoggingLive), Layer.provide(ConfigLive)),
+    AppLive.pipe(Layer.provideMerge(LoggingLive), Layer.provide(ConfigLive)),
     { disableLogger: true }
   )
 }
