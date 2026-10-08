@@ -1,6 +1,14 @@
 import { BaseModel } from 'esix'
 import { z } from 'zod'
 
+import {
+  getJobStatus,
+  getNextRunAt,
+  getSiteStatus,
+  type AuditProgress,
+  type JobStatus,
+  type SiteStatus
+} from '../lib/job-status'
 import { timestampToDateTime } from '../lib/time'
 
 export const createSiteSchema = z.object({
@@ -33,12 +41,21 @@ export const updateSiteSchema = z.object({
     .optional()
 })
 
+export interface SitemapStatusDto {
+  error: string | null
+  lastScrapedAt: string | null
+  nextScrapeAt: string | null
+  status: JobStatus
+}
+
 export interface SiteDto {
+  audits: AuditProgress
   createdAt: string
   domain: string
-  hasScrapedTheSitemap: boolean
   id: string
+  sitemap: SitemapStatusDto
   sitemapPath: string
+  status: SiteStatus
   teamId: string
 }
 
@@ -50,13 +67,28 @@ export class Site extends BaseModel {
   public scrapeSitemapError: string | null = null
 }
 
-export function toSiteDto(site: Site): SiteDto {
+export function toSiteDto(site: Site, audits: AuditProgress): SiteDto {
+  const sitemapStatus = getJobStatus(
+    site.lastScrapedSitemapAt,
+    site.scrapeSitemapError
+  )
+
   return {
+    audits,
     createdAt: timestampToDateTime(site.createdAt),
     domain: site.domain,
-    hasScrapedTheSitemap: site.lastScrapedSitemapAt !== null,
     id: site.id,
+    sitemap: {
+      error: site.scrapeSitemapError,
+      lastScrapedAt:
+        site.lastScrapedSitemapAt === null
+          ? null
+          : timestampToDateTime(site.lastScrapedSitemapAt),
+      nextScrapeAt: getNextRunAt(site.lastScrapedSitemapAt),
+      status: sitemapStatus
+    },
     sitemapPath: site.sitemapPath,
+    status: getSiteStatus(sitemapStatus, audits),
     teamId: site.teamId
   }
 }

@@ -6,8 +6,9 @@
     "deploy": "wrangler deploy --minify",
     "dev": "wrangler dev",
     "format": "prettier --write .",
-    "run-audits": "tsx src/commands/run-audits.ts",
-    "scrape-sitemaps": "tsx src/commands/scrape-sitemaps.ts",
+    "run-audits": "bun src/commands/run-audits.ts",
+    "run-jobs": "bun src/commands/run-jobs.ts",
+    "scrape-sitemaps": "bun src/commands/scrape-sitemaps.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -30,7 +31,6 @@
     "@types/node": "^25.2.3",
     "mongo-mock": "^4.2.0",
     "prettier": "^3.8.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "wrangler": "^4.4.0"

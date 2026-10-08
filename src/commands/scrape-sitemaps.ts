@@ -5,9 +5,11 @@ import dayjs from 'dayjs'
 import { connectionHandler } from 'esix'
 import { XMLParser } from 'fast-xml-parser'
 
+import { findSitesDueForScrape } from '../lib/job-queue'
 import { Logger } from '../lib/logger'
+import { runPool } from '../lib/run-pool'
 import { Page } from '../models/page'
-import { Site } from '../models/site'
+import type { Site } from '../models/site'
 
 export const MAX_PAGES_PER_SITE = 250
 
@@ -24,7 +26,10 @@ export async function fetchSitemap(
   try {
     response = await fetch(url, { signal: AbortSignal.timeout(15_000) })
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (
+      error instanceof DOMException &&
+      (error.name === 'AbortError' || error.name === 'TimeoutError')
+    ) {
       throw new Error(`Timeout fetching ${url}`)
     }
     throw error
@@ -109,29 +114,9 @@ export async function scrapeSite(
   }
 }
 
-async function runPool(
-  sites: Site[],
-  concurrency: number,
-  logger: Logger
-): Promise<void> {
-  let index = 0
-
-  async function worker(): Promise<void> {
-    while (index < sites.length) {
-      const site = sites[index++]
-
-      await scrapeSite(site, logger)
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, sites.length) }, () => worker())
-  )
-}
-
 if (import.meta.main) {
   program
-    .description('Scrape sitemaps for all sites')
+    .description('Scrape sitemaps for sites that are due')
     .option('--limit <number>', 'maximum number of sites to scrape', '10')
     .option(
       '--concurrency <number>',
@@ -140,9 +125,9 @@ if (import.meta.main) {
     )
     .parse()
 
-  const opts = program.opts()
-  const limit = parseInt(opts.limit, 10)
-  const concurrency = Math.min(parseInt(opts.concurrency, 10), 5)
+  const options = program.opts()
+  const limit = parseInt(options.limit, 10)
+  const concurrency = Math.min(parseInt(options.concurrency, 10), 5)
   const logger = new Logger(process.env.AXIOM_TOKEN)
 
   async function main(): Promise<void> {
@@ -150,34 +135,17 @@ if (import.meta.main) {
       `Fetching up to ${limit} sites to scrape (concurrency: ${concurrency})...`
     )
 
-    const sites = await Site.all()
+    const sites = await findSitesDueForScrape(Date.now(), limit)
 
-    sites.sort((a, b) => {
-      if (a.lastScrapedSitemapAt === null && b.lastScrapedSitemapAt === null) {
-        return 0
-      }
-      if (a.lastScrapedSitemapAt === null) {
-        return -1
-      }
-      if (b.lastScrapedSitemapAt === null) {
-        return 1
-      }
-      return a.lastScrapedSitemapAt - b.lastScrapedSitemapAt
-    })
+    if (sites.length === 0) {
+      logger.info('No sites are due for a scrape.')
+    } else {
+      logger.info(`Found ${sites.length} sites to scrape.`)
 
-    const sitesToScrape = sites.slice(0, limit)
+      await runPool(sites, { concurrency }, (site) => scrapeSite(site, logger))
 
-    if (sitesToScrape.length === 0) {
-      logger.info('No sites to scrape.')
-      await connectionHandler.closeConnections()
-      return
+      logger.info('Done.')
     }
-
-    logger.info(`Found ${sitesToScrape.length} sites to scrape.`)
-
-    await runPool(sitesToScrape, concurrency, logger)
-
-    logger.info('Done.')
 
     await logger.flush()
     await connectionHandler.closeConnections()

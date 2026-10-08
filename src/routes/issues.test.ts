@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { PageAuditReport } from '../models/page'
 import type { Page } from '../models/page'
+import type { Site } from '../models/site'
 import {
   app,
   createAuthToken,
@@ -46,7 +47,13 @@ function makeAuditReport(
 
 async function setAuditReport(page: Page, report: PageAuditReport) {
   page.auditReport = report
+  page.lastAuditedAt = Date.now()
   await page.save()
+}
+
+async function markSitemapScraped(site: Site) {
+  site.lastScrapedSitemapAt = Date.now()
+  await site.save()
 }
 
 interface IssueResponse {
@@ -510,5 +517,82 @@ describe('GET /issues', () => {
     expect(body.issues).toHaveLength(1)
     expect(body.issues[0].pages).toHaveLength(1)
     expect(body.issues[0].pages[0].path).toEqual('/mine')
+  })
+})
+
+describe('GET /issues status', () => {
+  it('is pending while the sitemap has not been scraped', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+
+    const response = await authenticatedRequest(`/issues?siteId=${site.id}`, {
+      token
+    })
+
+    expect(await response.json()).toEqual({
+      audits: {
+        completedPages: 0,
+        failedPages: 0,
+        pendingPages: 0,
+        totalPages: 0
+      },
+      issues: [],
+      status: 'pending'
+    })
+  })
+
+  it('is pending while pages are waiting for an audit', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+    await markSitemapScraped(site)
+
+    const audited = await createTestPage(site.id, { path: '/audited' })
+    await createTestPage(site.id, { path: '/waiting' })
+    await setAuditReport(audited, makeAuditReport())
+
+    const response = await authenticatedRequest(`/issues?siteId=${site.id}`, {
+      token
+    })
+
+    expect(await response.json()).toEqual({
+      audits: {
+        completedPages: 1,
+        failedPages: 0,
+        pendingPages: 1,
+        totalPages: 2
+      },
+      issues: [],
+      status: 'pending'
+    })
+  })
+
+  it('is ready when the sitemap is scraped and every page is audited', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+    await markSitemapScraped(site)
+
+    const page = await createTestPage(site.id)
+    await setAuditReport(page, makeAuditReport())
+
+    const response = await authenticatedRequest(`/issues?siteId=${site.id}`, {
+      token
+    })
+
+    expect(await response.json()).toEqual({
+      audits: {
+        completedPages: 1,
+        failedPages: 0,
+        pendingPages: 0,
+        totalPages: 1
+      },
+      issues: [],
+      status: 'ready'
+    })
   })
 })

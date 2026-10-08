@@ -1,0 +1,9 @@
+.claude
+.dev.vars
+.env
+.env.*
+.git
+.github
+.wrangler
+node_modules
+skills

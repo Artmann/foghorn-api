@@ -1059,12 +1059,19 @@ export const openapiSpec = {
                 schema: {
                   type: 'object',
                   properties: {
+                    status: {
+                      type: 'string',
+                      enum: ['pending', 'ready'],
+                      description:
+                        '`pending` while a sitemap has not been scraped yet or pages are waiting for their first audit. The issue list is incomplete until it is `ready`.'
+                    },
+                    audits: { $ref: '#/components/schemas/AuditProgressDto' },
                     issues: {
                       type: 'array',
                       items: { $ref: '#/components/schemas/IssueDto' }
                     }
                   },
-                  required: ['issues']
+                  required: ['status', 'audits', 'issues']
                 }
               }
             }
@@ -1352,6 +1359,50 @@ export const openapiSpec = {
         },
         required: ['id', 'teamId', 'userId', 'createdAt']
       },
+      AuditProgressDto: {
+        type: 'object',
+        description: 'How many pages have been audited.',
+        properties: {
+          completedPages: { type: 'integer' },
+          failedPages: {
+            type: 'integer',
+            description:
+              'Pages whose last audit failed. They are retried after the cooldown.'
+          },
+          pendingPages: {
+            type: 'integer',
+            description: 'Pages waiting for their first audit.'
+          },
+          totalPages: { type: 'integer' }
+        },
+        required: [
+          'completedPages',
+          'failedPages',
+          'pendingPages',
+          'totalPages'
+        ]
+      },
+      SitemapStatusDto: {
+        type: 'object',
+        properties: {
+          error: {
+            type: ['string', 'null'],
+            description: 'Why the last scrape failed, if it did.'
+          },
+          lastScrapedAt: { type: ['string', 'null'], format: 'date-time' },
+          nextScrapeAt: {
+            type: ['string', 'null'],
+            format: 'date-time',
+            description:
+              'When the sitemap is scraped again. Null while the first scrape is pending.'
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'completed', 'failed']
+          }
+        },
+        required: ['error', 'lastScrapedAt', 'nextScrapeAt', 'status']
+      },
       SiteDto: {
         type: 'object',
         properties: {
@@ -1359,7 +1410,14 @@ export const openapiSpec = {
           teamId: { type: 'string' },
           domain: { type: 'string' },
           sitemapPath: { type: 'string' },
-          hasScrapedTheSitemap: { type: 'boolean' },
+          status: {
+            type: 'string',
+            enum: ['pending', 'ready', 'failed'],
+            description:
+              '`pending` while the sitemap or any page is waiting to be processed. `failed` when the sitemap could not be scraped and there are no pages. `ready` otherwise.'
+          },
+          sitemap: { $ref: '#/components/schemas/SitemapStatusDto' },
+          audits: { $ref: '#/components/schemas/AuditProgressDto' },
           createdAt: { type: 'string', format: 'date-time' }
         },
         required: [
@@ -1367,7 +1425,9 @@ export const openapiSpec = {
           'teamId',
           'domain',
           'sitemapPath',
-          'hasScrapedTheSitemap',
+          'status',
+          'sitemap',
+          'audits',
           'createdAt'
         ]
       },
@@ -1378,14 +1438,30 @@ export const openapiSpec = {
           siteId: { type: 'string' },
           path: { type: 'string' },
           url: { type: 'string' },
+          auditStatus: {
+            type: 'string',
+            enum: ['pending', 'completed', 'failed'],
+            description:
+              '`pending` until the first audit runs. `failed` when the last audit failed.'
+          },
+          auditError: {
+            type: ['string', 'null'],
+            description: 'Why the last audit failed, if it did.'
+          },
           lastAuditedAt: {
             type: ['string', 'null'],
             format: 'date-time'
           },
+          nextAuditAt: {
+            type: ['string', 'null'],
+            format: 'date-time',
+            description:
+              'When the page is audited again. Null while the first audit is pending.'
+          },
           auditReport: {
             type: ['object', 'null'],
             description:
-              'Full Lighthouse audit report, or null if not yet audited.'
+              'Last successful Lighthouse audit report, or null if there is none.'
           },
           createdAt: { type: 'string', format: 'date-time' }
         },
@@ -1394,7 +1470,10 @@ export const openapiSpec = {
           'siteId',
           'path',
           'url',
+          'auditStatus',
+          'auditError',
           'lastAuditedAt',
+          'nextAuditAt',
           'auditReport',
           'createdAt'
         ]

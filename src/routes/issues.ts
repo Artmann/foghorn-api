@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { ApiError } from '../lib/api-error'
+import { summarizeAudits } from '../lib/job-status'
 import { authMiddleware } from '../middleware/auth'
 import type { CategoryResult } from '../models/page'
 import { Page } from '../models/page'
@@ -17,6 +18,8 @@ const validCategories = [
 ] as const
 
 type Category = (typeof validCategories)[number]
+
+type IssuesStatus = 'pending' | 'ready'
 
 interface IssuePage {
   pageId: string
@@ -72,7 +75,7 @@ issues.get('/', async (context) => {
     )
   }
 
-  let allPages: Page[]
+  const allSites: Site[] = []
 
   if (siteId) {
     const site = await Site.find(siteId)
@@ -83,23 +86,32 @@ issues.get('/', async (context) => {
 
     await requireTeamMembership(site.teamId, auth.userId)
 
-    allPages = await Page.where('siteId', siteId).get()
+    allSites.push(site)
   } else {
     const memberships = await TeamMember.where('userId', auth.userId).get()
     const teamIds = memberships.map((m) => m.teamId)
 
-    const allSites: Site[] = []
     for (const id of teamIds) {
       const teamSites = await Site.where('teamId', id).get()
       allSites.push(...teamSites)
     }
-
-    allPages = []
-    for (const site of allSites) {
-      const sitePages = await Page.where('siteId', site.id).get()
-      allPages.push(...sitePages)
-    }
   }
+
+  const allPages: Page[] = []
+
+  for (const site of allSites) {
+    const sitePages = await Page.where('siteId', site.id).get()
+    allPages.push(...sitePages)
+  }
+
+  // Issues are incomplete while a sitemap hasn't been scraped yet or pages are
+  // waiting for their first audit.
+  const audits = summarizeAudits(allPages)
+  const hasPendingSitemaps = allSites.some(
+    (site) => site.lastScrapedSitemapAt === null
+  )
+  const status: IssuesStatus =
+    hasPendingSitemaps || audits.pendingPages > 0 ? 'pending' : 'ready'
 
   const categoriesToCheck: Category[] = category
     ? [category as Category]
@@ -156,7 +168,7 @@ issues.get('/', async (context) => {
   // Sort issues by page count descending (most widespread first).
   result.sort((a, b) => b.pages.length - a.pages.length)
 
-  return context.json({ issues: result })
+  return context.json({ audits, issues: result, status })
 })
 
 export default issues

@@ -4,40 +4,40 @@ import { program } from 'commander'
 import dayjs from 'dayjs'
 import { connectionHandler } from 'esix'
 
+import { findPagesDueForAudit } from '../lib/job-queue'
 import { Logger } from '../lib/logger'
+import { runPool } from '../lib/run-pool'
 import {
-  Page,
   type AuditResult,
   type CategoryResult,
   type FieldMetric,
+  type Page,
   type PageAuditReport
 } from '../models/page'
 
-program
-  .description('Run PageSpeed Insights audits on pages')
-  .option('--limit <number>', 'maximum number of pages to audit', '10')
-  .option('--concurrency <number>', 'number of concurrent workers (max 5)', '5')
-  .option('--delay <number>', 'delay in seconds between audits per worker', '3')
-  .parse()
-
-const opts = program.opts()
-const limit = parseInt(opts.limit, 10)
-const concurrency = Math.min(parseInt(opts.concurrency, 10), 5)
-const delayMs = Math.max(parseFloat(opts.delay), 0) * 1000
-const logger = new Logger(process.env.AXIOM_TOKEN)
-
-const PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY
+export class PageSpeedRateLimitError extends Error {
+  constructor() {
+    super(
+      'PageSpeed Insights is rate limiting requests. Set PAGESPEED_API_KEY or lower the concurrency.'
+    )
+    this.name = 'PageSpeedRateLimitError'
+  }
+}
 
 function extractFieldData(
   loadingExperience: Record<string, unknown> | undefined
 ): Record<string, FieldMetric> | null {
-  if (!loadingExperience) return null
+  if (!loadingExperience) {
+    return null
+  }
 
   const metrics = loadingExperience.metrics as
     | Record<string, Record<string, unknown>>
     | undefined
 
-  if (!metrics) return null
+  if (!metrics) {
+    return null
+  }
 
   const fieldData: Record<string, FieldMetric> = {}
 
@@ -65,7 +65,10 @@ function extractCategory(
 
   for (const ref of auditRefs) {
     const audit = allAudits[ref.id]
-    if (!audit) continue
+
+    if (!audit) {
+      continue
+    }
 
     const result: AuditResult = {
       id: audit.id as string,
@@ -90,7 +93,7 @@ function extractCategory(
   }
 }
 
-async function auditPage(page: Page): Promise<void> {
+export async function auditPage(page: Page, logger: Logger): Promise<void> {
   logger.info(`Auditing ${page.url}...`)
 
   try {
@@ -104,8 +107,10 @@ async function auditPage(page: Page): Promise<void> {
     params.append('category', 'best-practices')
     params.append('category', 'seo')
 
-    if (PAGESPEED_API_KEY) {
-      params.set('key', PAGESPEED_API_KEY)
+    const pageSpeedApiKey = process.env.PAGESPEED_API_KEY
+
+    if (pageSpeedApiKey) {
+      params.set('key', pageSpeedApiKey)
     }
 
     const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params}`
@@ -117,13 +122,21 @@ async function auditPage(page: Page): Promise<void> {
     try {
       response = await fetch(apiUrl, { signal: AbortSignal.timeout(60_000) })
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (
+        error instanceof DOMException &&
+        (error.name === 'AbortError' || error.name === 'TimeoutError')
+      ) {
         throw new Error(`Timeout auditing ${page.url}`)
       }
+
       throw error
     }
 
     const durationMs = Date.now() - startMs
+
+    if (response.status === 429) {
+      throw new PageSpeedRateLimitError()
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} auditing ${page.url}`)
@@ -162,6 +175,12 @@ async function auditPage(page: Page): Promise<void> {
       `Audited ${page.url} in ${durationMs}ms (performance: ${report.performance.score})`
     )
   } catch (error) {
+    // Being rate limited says nothing about the page, so leave it as is and
+    // let the caller back off.
+    if (error instanceof PageSpeedRateLimitError) {
+      throw error
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error'
 
     logger.error(`Error auditing ${page.url}: ${message}`)
@@ -172,64 +191,103 @@ async function auditPage(page: Page): Promise<void> {
   }
 }
 
-async function runPool(pages: Page[], concurrency: number): Promise<void> {
-  let index = 0
+// Audits the pages in parallel. Stops picking up new pages when `signal`
+// aborts or PageSpeed starts rate limiting.
+export async function auditPages(
+  pages: Page[],
+  logger: Logger,
+  options: { concurrency: number; delayMs: number; signal?: AbortSignal }
+): Promise<{ rateLimited: boolean }> {
+  const controller = new AbortController()
+  const onAbort = () => controller.abort()
+  let rateLimited = false
 
-  async function worker(): Promise<void> {
-    let first = true
+  options.signal?.addEventListener('abort', onAbort, { once: true })
 
-    while (index < pages.length) {
-      if (!first && delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs))
+  try {
+    await runPool(
+      pages,
+      {
+        concurrency: options.concurrency,
+        delayMs: options.delayMs,
+        signal: controller.signal
+      },
+      async (page) => {
+        try {
+          await auditPage(page, logger)
+        } catch (error) {
+          if (!(error instanceof PageSpeedRateLimitError)) {
+            throw error
+          }
+
+          if (!rateLimited) {
+            logger.warn(error.message)
+          }
+
+          rateLimited = true
+          controller.abort()
+        }
       }
-      first = false
+    )
+  } finally {
+    options.signal?.removeEventListener('abort', onAbort)
+  }
 
-      const page = pages[index++]
+  return { rateLimited }
+}
 
-      await auditPage(page)
+if (import.meta.main) {
+  program
+    .description('Run PageSpeed Insights audits on pages that are due')
+    .option('--limit <number>', 'maximum number of pages to audit', '10')
+    .option(
+      '--concurrency <number>',
+      'number of concurrent workers (max 5)',
+      '5'
+    )
+    .option(
+      '--delay <number>',
+      'delay in seconds between audits per worker',
+      '3'
+    )
+    .parse()
+
+  const options = program.opts()
+  const limit = parseInt(options.limit, 10)
+  const concurrency = Math.min(parseInt(options.concurrency, 10), 5)
+  const delayMs = Math.max(parseFloat(options.delay), 0) * 1000
+  const logger = new Logger(process.env.AXIOM_TOKEN)
+
+  async function main(): Promise<void> {
+    logger.info(
+      `Fetching up to ${limit} pages to audit (concurrency: ${concurrency})...`
+    )
+
+    const pages = await findPagesDueForAudit(Date.now(), limit)
+
+    if (pages.length === 0) {
+      logger.info('No pages are due for an audit.')
+    } else {
+      logger.info(`Found ${pages.length} pages to audit.`)
+
+      const { rateLimited } = await auditPages(pages, logger, {
+        concurrency,
+        delayMs
+      })
+
+      logger.info(
+        rateLimited ? 'Stopped early because of rate limiting.' : 'Done.'
+      )
     }
-  }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, pages.length) }, () => worker())
-  )
-}
-
-async function main(): Promise<void> {
-  logger.info(
-    `Fetching up to ${limit} pages to audit (concurrency: ${concurrency})...`
-  )
-
-  const pages = await Page.all()
-
-  pages.sort((a, b) => {
-    if (a.lastAuditedAt === null && b.lastAuditedAt === null) return 0
-    if (a.lastAuditedAt === null) return -1
-    if (b.lastAuditedAt === null) return 1
-    return a.lastAuditedAt - b.lastAuditedAt
-  })
-
-  const pagesToAudit = pages.slice(0, limit)
-
-  if (pagesToAudit.length === 0) {
-    logger.info('No pages to audit.')
+    await logger.flush()
     await connectionHandler.closeConnections()
-    return
   }
 
-  logger.info(`Found ${pagesToAudit.length} pages to audit.`)
-
-  await runPool(pagesToAudit, concurrency)
-
-  logger.info('Done.')
-
-  await logger.flush()
-  await connectionHandler.closeConnections()
+  main().catch(async (error) => {
+    logger.error('Fatal error', { error: String(error) })
+    await logger.flush()
+    await connectionHandler.closeConnections()
+    process.exit(1)
+  })
 }
-
-main().catch(async (error) => {
-  logger.error('Fatal error', { error: String(error) })
-  await logger.flush()
-  await connectionHandler.closeConnections()
-  process.exit(1)
-})

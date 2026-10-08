@@ -1,32 +1,40 @@
 ---
 name: lighthouse-audit
 description: >
-  Run Lighthouse audits against websites using the Foghorn API. Use when the user
-  wants to check a site's performance, accessibility, best practices, or SEO issues.
-  Covers sign-up, authentication, team/site setup, and issue retrieval.
+  Run Lighthouse audits against websites using the Foghorn API. Use when the
+  user wants to check a site's performance, accessibility, best practices, or
+  SEO issues. Covers sign-up, authentication, team/site setup, and issue
+  retrieval.
 metadata:
   author: artgaard
-  version: "1.0"
+  version: '1.0'
 allowed-tools: Bash(curl:*foghorn-api.artgaard.workers.dev*), Read, Write
 ---
 
 # Lighthouse Audit Skill
 
-Run Lighthouse audits and retrieve performance, accessibility, best-practices, and SEO issues for any website using the [Foghorn API](https://foghorn-api.artgaard.workers.dev).
+Run Lighthouse audits and retrieve performance, accessibility, best-practices,
+and SEO issues for any website using the
+[Foghorn API](https://foghorn-api.artgaard.workers.dev).
 
 ## Overview
 
-Foghorn is a site-health monitoring service built on Lighthouse. You register a site, Foghorn crawls its sitemap, audits every page, and exposes the results through a REST API. This skill lets you interact with that API using `curl`.
+Foghorn is a site-health monitoring service built on Lighthouse. You register a
+site, Foghorn crawls its sitemap, audits every page, and exposes the results
+through a REST API. This skill lets you interact with that API using `curl`.
 
 **Base URL:** `https://foghorn-api.artgaard.workers.dev`
 
 ## Authentication
 
-All endpoints (except sign-up, sign-in, and health check) require a Bearer token in the `Authorization` header.
+All endpoints (except sign-up, sign-in, and health check) require a Bearer token
+in the `Authorization` header.
 
 ### Step 1 — Check for a stored API key
 
-Read `~/.foghorn`. If the file exists and its contents start with `fh_`, you already have a valid API key. Set the auth header and skip to [Setup Workflow](#setup-workflow):
+Read `~/.foghorn`. If the file exists and its contents start with `fh_`, you
+already have a valid API key. Set the auth header and skip to
+[Setup Workflow](#setup-workflow):
 
 ```
 AUTH="Authorization: Bearer <key from ~/.foghorn>"
@@ -34,7 +42,8 @@ AUTH="Authorization: Bearer <key from ~/.foghorn>"
 
 ### Step 2 — First-time setup (only if `~/.foghorn` is missing or empty)
 
-If no stored key is found, ask the user for their email and password, then run through sign-up, sign-in, and key creation.
+If no stored key is found, ask the user for their email and password, then run
+through sign-up, sign-in, and key creation.
 
 #### Sign up (first time only)
 
@@ -67,7 +76,8 @@ Returns the full key **once** in `apiKey.key`.
 
 #### Save the key
 
-Write the `fh_...` key to `~/.foghorn` so it is reused in future sessions. Then set the auth header:
+Write the `fh_...` key to `~/.foghorn` so it is reused in future sessions. Then
+set the auth header:
 
 ```
 AUTH="Authorization: Bearer <key>"
@@ -95,25 +105,54 @@ curl -s -X POST https://foghorn-api.artgaard.workers.dev/sites \
   -d '{"teamId":"TEAM_ID","domain":"www.example.com"}'
 ```
 
-The `sitemapPath` defaults to `/sitemap.xml`. Override it if your sitemap lives elsewhere.
+The `sitemapPath` defaults to `/sitemap.xml`. Override it if your sitemap lives
+elsewhere.
 
 ### 3. Wait for the crawl
 
-Foghorn periodically scrapes sitemaps and audits discovered pages. Check progress:
+Foghorn scrapes the sitemap and audits each page in the background. This is not
+instant: a new site can take minutes to hours depending on how many pages it
+has. Check progress:
 
 ```bash
 curl -s https://foghorn-api.artgaard.workers.dev/sites/SITE_ID \
   -H "$AUTH"
 ```
 
-When `hasScrapedTheSitemap` is `true`, the sitemap has been processed. Then check pages:
+The site includes its processing state:
 
-```bash
-curl -s "https://foghorn-api.artgaard.workers.dev/pages?siteId=SITE_ID" \
-  -H "$AUTH"
+```json
+{
+  "site": {
+    "status": "pending",
+    "sitemap": {
+      "status": "completed",
+      "error": null,
+      "lastScrapedAt": "2026-10-08T12:00:00.000Z",
+      "nextScrapeAt": "2026-10-08T16:00:00.000Z"
+    },
+    "audits": {
+      "completedPages": 12,
+      "failedPages": 1,
+      "pendingPages": 37,
+      "totalPages": 50
+    }
+  }
+}
 ```
 
-Pages with a non-null `lastAuditedAt` have completed audits.
+- `status: "pending"` — the sitemap or some pages are still waiting. Tell the
+  user how far along it is (for example "12 of 50 pages audited") and check
+  again later. Don't poll in a tight loop; once every few minutes is enough.
+- `status: "ready"` — everything has been audited at least once. Issues are
+  complete.
+- `status: "failed"` — the sitemap could not be scraped. Show `sitemap.error` to
+  the user. Usually the sitemap path is wrong; fix it with `PUT /sites/SITE_ID`
+  and a new `sitemapPath`, which queues a new scrape.
+
+Each page has its own `auditStatus` (`pending`, `completed` or `failed`) and
+`auditError`. Sitemaps and pages are refreshed every 4 hours (`nextScrapeAt`,
+`nextAuditAt`).
 
 ## Querying Issues
 
@@ -135,6 +174,13 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
 
 ```json
 {
+  "status": "ready",
+  "audits": {
+    "completedPages": 50,
+    "failedPages": 0,
+    "pendingPages": 0,
+    "totalPages": 50
+  },
   "issues": [
     {
       "auditId": "uses-responsive-images",
@@ -154,6 +200,9 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
 }
 ```
 
+- When `status` is `pending`, the list is incomplete because pages are still
+  being audited. Say so when you report the issues, and include the progress
+  from `audits`.
 - Issues are sorted by number of affected pages (most widespread first).
 - Pages within each issue are sorted by score ascending (worst first).
 - Scores range from 0 (fail) to 1 (pass).
@@ -169,29 +218,30 @@ curl -s "https://foghorn-api.artgaard.workers.dev/pages?siteId=SITE_ID&search=bl
 
 ## Quick Reference
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/` | Health check |
-| POST | `/auth/sign-up` | Create account |
-| POST | `/auth/sign-in` | Get JWT token |
-| POST | `/api-keys` | Create API key |
-| GET | `/api-keys` | List API keys |
-| DELETE | `/api-keys/:id` | Delete API key |
-| POST | `/teams` | Create team |
-| GET | `/teams` | List teams |
-| GET | `/teams/:id` | Get team |
-| PUT | `/teams/:id` | Update team |
-| DELETE | `/teams/:id` | Delete team |
-| POST | `/teams/:id/members` | Add member |
-| GET | `/teams/:id/members` | List members |
-| DELETE | `/teams/:id/members/:userId` | Remove member |
-| POST | `/sites` | Add site |
-| GET | `/sites` | List sites (optional `?teamId=`) |
-| GET | `/sites/:id` | Get site |
-| PUT | `/sites/:id` | Update site |
-| DELETE | `/sites/:id` | Delete site |
-| GET | `/pages` | List pages (optional `?siteId=`, `?search=`) |
-| GET | `/pages/:id` | Get page with audit report |
-| GET | `/issues` | List issues (optional `?siteId=`, `?category=`) |
+| Method | Path                         | Purpose                                         |
+| ------ | ---------------------------- | ----------------------------------------------- |
+| GET    | `/`                          | Health check                                    |
+| POST   | `/auth/sign-up`              | Create account                                  |
+| POST   | `/auth/sign-in`              | Get JWT token                                   |
+| POST   | `/api-keys`                  | Create API key                                  |
+| GET    | `/api-keys`                  | List API keys                                   |
+| DELETE | `/api-keys/:id`              | Delete API key                                  |
+| POST   | `/teams`                     | Create team                                     |
+| GET    | `/teams`                     | List teams                                      |
+| GET    | `/teams/:id`                 | Get team                                        |
+| PUT    | `/teams/:id`                 | Update team                                     |
+| DELETE | `/teams/:id`                 | Delete team                                     |
+| POST   | `/teams/:id/members`         | Add member                                      |
+| GET    | `/teams/:id/members`         | List members                                    |
+| DELETE | `/teams/:id/members/:userId` | Remove member                                   |
+| POST   | `/sites`                     | Add site                                        |
+| GET    | `/sites`                     | List sites (optional `?teamId=`)                |
+| GET    | `/sites/:id`                 | Get site                                        |
+| PUT    | `/sites/:id`                 | Update site                                     |
+| DELETE | `/sites/:id`                 | Delete site                                     |
+| GET    | `/pages`                     | List pages (optional `?siteId=`, `?search=`)    |
+| GET    | `/pages/:id`                 | Get page with audit report                      |
+| GET    | `/issues`                    | List issues (optional `?siteId=`, `?category=`) |
 
-See [references/api-reference.md](references/api-reference.md) for full request/response schemas.
+See [references/api-reference.md](references/api-reference.md) for full
+request/response schemas.

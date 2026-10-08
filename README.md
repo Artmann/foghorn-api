@@ -10,8 +10,8 @@ agent to monitor site health and act on issues without leaving the loop.
 ### Use from an agent
 
 Install the Foghorn skill to use the API directly from Claude Code, Cursor,
-Gemini CLI, or any agent that supports the [Agent Skills](https://agentskills.io)
-spec:
+Gemini CLI, or any agent that supports the
+[Agent Skills](https://agentskills.io) spec:
 
 ```bash
 npx skills add https://github.com/artmann/foghorn-api
@@ -67,10 +67,39 @@ curl -X POST https://foghorn-api.artgaard.workers.dev/sites \
   -d '{"teamId": "<team-id>", "domain": "www.example.com"}'
 ```
 
-Returns the site object including its `id`. Foghorn will begin crawling the
-sitemap and running Lighthouse audits.
+Returns the site object including its `id`. The site starts with
+`"status": "pending"`. The [job runner](#job-runner) picks it up, scrapes the
+sitemap, and audits each page.
 
-### 5. List issues
+### 5. Wait for the audits
+
+```bash
+curl https://foghorn-api.artgaard.workers.dev/sites/<site-id> \
+  -H "Authorization: Bearer <token>"
+```
+
+`status` is `pending` while the sitemap or any page is waiting to be processed,
+and `ready` once everything has been audited. `audits` shows the progress:
+
+```json
+{
+  "status": "pending",
+  "sitemap": {
+    "status": "completed",
+    "error": null,
+    "lastScrapedAt": "...",
+    "nextScrapeAt": "..."
+  },
+  "audits": {
+    "completedPages": 12,
+    "failedPages": 1,
+    "pendingPages": 37,
+    "totalPages": 50
+  }
+}
+```
+
+### 6. List issues
 
 ```bash
 curl https://foghorn-api.artgaard.workers.dev/issues?siteId=<site-id> \
@@ -78,7 +107,8 @@ curl https://foghorn-api.artgaard.workers.dev/issues?siteId=<site-id> \
 ```
 
 Returns audit failures grouped by audit ID, sorted by the number of affected
-pages. Each issue includes the list of pages where the audit fails.
+pages. Each issue includes the list of pages where the audit fails. The response
+also has a `status`: while it's `pending`, the list is incomplete.
 
 ## Authentication
 
@@ -263,6 +293,17 @@ GET /sites?teamId=team-id-here
 GET /sites/:id
 ```
 
+Every site includes its processing state:
+
+- `status`: `pending` while the sitemap or any page is waiting to be processed,
+  `failed` when the sitemap could not be scraped and there are no pages, and
+  `ready` otherwise.
+- `sitemap`: `status` (`pending`, `completed` or `failed`), `error`,
+  `lastScrapedAt` and `nextScrapeAt`.
+- `audits`: `completedPages`, `failedPages`, `pendingPages` and `totalPages`.
+
+Sitemaps are scraped and pages audited at most every 4 hours.
+
 #### Update a site
 
 ```
@@ -276,7 +317,7 @@ PUT /sites/:id
 }
 ```
 
-Both fields are optional.
+Both fields are optional. Changing either one queues a new sitemap scrape.
 
 #### Delete a site
 
@@ -306,6 +347,10 @@ that site. Otherwise, returns pages across all sites you have access to.
 GET /pages/:id
 ```
 
+Every page includes `auditStatus` (`pending`, `completed` or `failed`),
+`auditError`, `lastAuditedAt` and `nextAuditAt`. A failed audit keeps the last
+successful `auditReport`.
+
 ### Issues
 
 All issue endpoints require authentication.
@@ -325,6 +370,23 @@ Returns audit failures grouped by audit ID across all pages. Each issue includes
 the list of pages where the audit fails, sorted by score ascending (worst
 first). Issues are sorted by number of affected pages descending.
 
+The response also includes `status` and `audits`. `status` is `pending` while a
+sitemap hasn't been scraped yet or pages are waiting for their first audit, so
+the issue list is incomplete. It's `ready` once everything has been audited.
+
+```json
+{
+  "status": "pending",
+  "audits": {
+    "completedPages": 12,
+    "failedPages": 1,
+    "pendingPages": 37,
+    "totalPages": 50
+  },
+  "issues": []
+}
+```
+
 ### Other
 
 #### Health check
@@ -338,3 +400,45 @@ GET /
 ```
 GET /openapi
 ```
+
+## Job runner
+
+The API only stores and serves data. A separate job runner scrapes sitemaps and
+runs PageSpeed Insights audits. It picks up sites and pages that have never been
+processed first, then anything older than 4 hours.
+
+### Run it in Docker
+
+Create `.env.production` with the production values (see `.env.example`):
+
+```bash
+DB_URL=mongodb+srv://...
+DB_DATABASE=foghorn-api
+PAGESPEED_API_KEY=...
+AXIOM_TOKEN=...
+```
+
+Then start the runner:
+
+```bash
+docker compose up --build
+```
+
+It runs until stopped. On `docker compose down` or Ctrl+C it finishes the
+current audits before exiting. Without `PAGESPEED_API_KEY`, PageSpeed rate
+limits almost right away. When that happens the runner leaves the pages pending
+and pauses audits for 5 minutes.
+
+### Run it without Docker
+
+```bash
+bun run run-jobs              # Keep running
+bun run run-jobs --once       # Run one cycle and exit
+bun run scrape-sitemaps       # Only scrape sitemaps that are due
+bun run run-audits            # Only audit pages that are due
+```
+
+`run-jobs` options: `--batch-size` (default 10), `--concurrency` (default 5, max
+5), `--delay` (seconds between audits per worker, default 3), `--idle-delay`
+(seconds to wait when there's nothing to do, default 60) and
+`--rate-limit-delay` (seconds to pause after being rate limited, default 300).

@@ -1,13 +1,15 @@
 import { Hono } from 'hono'
 
 import { ApiError } from '../lib/api-error'
+import { countSiteAudits } from '../lib/job-queue'
 import { jsonValidator } from '../lib/validation'
 import { authMiddleware } from '../middleware/auth'
 import {
   Site,
   createSiteSchema,
   toSiteDto,
-  updateSiteSchema
+  updateSiteSchema,
+  type SiteDto
 } from '../models/site'
 import { Team } from '../models/team'
 import { TeamMember } from '../models/team-member'
@@ -40,6 +42,10 @@ async function requireTeamMembership(
   return team
 }
 
+async function buildSiteDto(site: Site): Promise<SiteDto> {
+  return toSiteDto(site, await countSiteAudits(site.id))
+}
+
 // Create a site.
 sites.post('/', jsonValidator(createSiteSchema), async (context) => {
   const auth = context.get('auth')
@@ -61,7 +67,7 @@ sites.post('/', jsonValidator(createSiteSchema), async (context) => {
 
   logger.info('Site created', { siteId: site.id, teamId, userId: auth.userId })
 
-  return context.json({ site: toSiteDto(site) }, 201)
+  return context.json({ site: await buildSiteDto(site) }, 201)
 })
 
 // List sites the user has access to, optionally filtered by teamId.
@@ -74,7 +80,9 @@ sites.get('/', async (context) => {
 
     const siteList = await Site.where('teamId', teamId).get()
 
-    return context.json({ sites: siteList.map(toSiteDto) })
+    return context.json({
+      sites: await Promise.all(siteList.map(buildSiteDto))
+    })
   }
 
   const memberships = await TeamMember.where('userId', auth.userId).get()
@@ -86,7 +94,7 @@ sites.get('/', async (context) => {
     allSites.push(...teamSites)
   }
 
-  return context.json({ sites: allSites.map(toSiteDto) })
+  return context.json({ sites: await Promise.all(allSites.map(buildSiteDto)) })
 })
 
 // Get a single site.
@@ -102,7 +110,7 @@ sites.get('/:id', async (context) => {
 
   await requireTeamMembership(site.teamId, auth.userId)
 
-  return context.json({ site: toSiteDto(site) })
+  return context.json({ site: await buildSiteDto(site) })
 })
 
 // Update a site.
@@ -120,12 +128,22 @@ sites.put('/:id', jsonValidator(updateSiteSchema), async (context) => {
 
   await requireTeamMembership(site.teamId, auth.userId)
 
+  const sitemapChanged =
+    (data.domain !== undefined && data.domain !== site.domain) ||
+    (data.sitemapPath !== undefined && data.sitemapPath !== site.sitemapPath)
+
   if (data.domain !== undefined) {
     site.domain = data.domain
   }
 
   if (data.sitemapPath !== undefined) {
     site.sitemapPath = data.sitemapPath
+  }
+
+  // Queue a new scrape so the change is picked up on the next job run.
+  if (sitemapChanged) {
+    site.lastScrapedSitemapAt = null
+    site.scrapeSitemapError = null
   }
 
   await site.save()
@@ -136,7 +154,7 @@ sites.put('/:id', jsonValidator(updateSiteSchema), async (context) => {
     userId: auth.userId
   })
 
-  return context.json({ site: toSiteDto(site) })
+  return context.json({ site: await buildSiteDto(site) })
 })
 
 // Delete a site.

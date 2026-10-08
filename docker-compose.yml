@@ -1,0 +1,9 @@
+services:
+  jobs:
+    build: .
+    env_file: .env.production
+    init: true
+    restart: unless-stopped
+    # An audit can take up to 60 seconds, so give the runner time to finish
+    # the current work when stopping.
+    stop_grace_period: 90s

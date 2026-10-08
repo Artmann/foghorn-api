@@ -1,5 +1,6 @@
 import { BaseModel } from 'esix'
 
+import { getJobStatus, getNextRunAt, type JobStatus } from '../lib/job-status'
 import { timestampToDateTime } from '../lib/time'
 
 export interface AuditResult {
@@ -39,13 +40,16 @@ export interface PageAuditReport {
 }
 
 export interface PageDto {
+  auditError: string | null
+  auditReport: PageAuditReport | null
+  auditStatus: JobStatus
   createdAt: string
   id: string
-  siteId: string
-  path: string
-  url: string
   lastAuditedAt: string | null
-  auditReport: PageAuditReport | null
+  nextAuditAt: string | null
+  path: string
+  siteId: string
+  url: string
 }
 
 export class Page extends BaseModel {
@@ -59,14 +63,18 @@ export class Page extends BaseModel {
 
 export function toPageDto(page: Page): PageDto {
   return {
+    auditError: page.auditError,
+    auditReport: page.auditReport,
+    auditStatus: getJobStatus(page.lastAuditedAt, page.auditError),
     createdAt: timestampToDateTime(page.createdAt),
     id: page.id,
-    siteId: page.siteId,
+    lastAuditedAt:
+      page.lastAuditedAt === null
+        ? null
+        : timestampToDateTime(page.lastAuditedAt),
+    nextAuditAt: getNextRunAt(page.lastAuditedAt),
     path: page.path,
-    url: page.url,
-    lastAuditedAt: page.lastAuditedAt
-      ? timestampToDateTime(page.lastAuditedAt)
-      : null,
-    auditReport: page.auditReport
+    siteId: page.siteId,
+    url: page.url
   }
 }

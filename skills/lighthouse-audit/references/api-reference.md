@@ -12,7 +12,8 @@ All endpoints return JSON. Errors use a consistent shape:
 }
 ```
 
-Common status codes: `200` OK, `201` Created, `400` Validation error, `401` Unauthorized, `403` Forbidden, `404` Not found, `409` Conflict.
+Common status codes: `200` OK, `201` Created, `400` Validation error, `401`
+Unauthorized, `403` Forbidden, `404` Not found, `409` Conflict.
 
 ---
 
@@ -24,10 +25,10 @@ Create a new account. No auth required.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| email | string | yes | Valid email format |
-| password | string | yes | Min 8 characters |
+| Field    | Type   | Required | Constraints        |
+| -------- | ------ | -------- | ------------------ |
+| email    | string | yes      | Valid email format |
+| password | string | yes      | Min 8 characters   |
 
 **Response:** `201`
 
@@ -51,10 +52,10 @@ Get a JWT token. No auth required.
 
 **Request body:**
 
-| Field | Type | Required |
-|-------|------|----------|
-| email | string | yes |
-| password | string | yes |
+| Field    | Type   | Required |
+| -------- | ------ | -------- |
+| email    | string | yes      |
+| password | string | yes      |
 
 **Response:** `200`
 
@@ -84,10 +85,10 @@ Create a new API key. The full key is only returned once.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| name | string | yes | 1-100 characters |
-| expiresAt | string | no | ISO 8601 datetime |
+| Field     | Type   | Required | Constraints       |
+| --------- | ------ | -------- | ----------------- |
+| name      | string | yes      | 1-100 characters  |
+| expiresAt | string | no       | ISO 8601 datetime |
 
 **Response:** `201`
 
@@ -155,9 +156,9 @@ Create a team. Max 5 teams per user.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| name | string | yes | 1-100 characters |
+| Field | Type   | Required | Constraints      |
+| ----- | ------ | -------- | ---------------- |
+| name  | string | yes      | 1-100 characters |
 
 **Response:** `201`
 
@@ -221,9 +222,9 @@ Update a team's name.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| name | string | yes | 1-100 characters |
+| Field | Type   | Required | Constraints      |
+| ----- | ------ | -------- | ---------------- |
+| name  | string | yes      | 1-100 characters |
 
 **Response:** `200`
 
@@ -263,9 +264,9 @@ Add a user to a team.
 
 **Request body:**
 
-| Field | Type | Required |
-|-------|------|----------|
-| userId | string | yes |
+| Field  | Type   | Required |
+| ------ | ------ | -------- |
+| userId | string | yes      |
 
 **Response:** `201`
 
@@ -280,7 +281,8 @@ Add a user to a team.
 }
 ```
 
-**Errors:** `404` user or team not found, `403` not a member, `409` already a member.
+**Errors:** `404` user or team not found, `403` not a member, `409` already a
+member.
 
 ---
 
@@ -333,11 +335,11 @@ Add a site to a team. Max 10 sites per team.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| teamId | string | yes | |
-| domain | string | yes | 1-255 characters |
-| sitemapPath | string | no | 1-255 characters, defaults to `/sitemap.xml` |
+| Field       | Type   | Required | Constraints                                  |
+| ----------- | ------ | -------- | -------------------------------------------- |
+| teamId      | string | yes      |                                              |
+| domain      | string | yes      | 1-255 characters                             |
+| sitemapPath | string | no       | 1-255 characters, defaults to `/sitemap.xml` |
 
 **Response:** `201`
 
@@ -348,13 +350,34 @@ Add a site to a team. Max 10 sites per team.
     "teamId": "string",
     "domain": "string",
     "sitemapPath": "string",
-    "hasScrapedTheSitemap": false,
+    "status": "pending | ready | failed",
+    "sitemap": {
+      "status": "pending | completed | failed",
+      "error": "string | null",
+      "lastScrapedAt": "ISO 8601 | null",
+      "nextScrapeAt": "ISO 8601 | null"
+    },
+    "audits": {
+      "completedPages": 0,
+      "failedPages": 0,
+      "pendingPages": 0,
+      "totalPages": 0
+    },
     "createdAt": "ISO 8601"
   }
 }
 ```
 
-**Errors:** `403` not a team member, `404` team not found, `409` max sites reached.
+- `status` is `pending` while the sitemap or any page is waiting to be
+  processed, `failed` when the sitemap could not be scraped and there are no
+  pages, and `ready` otherwise.
+- `sitemap.nextScrapeAt` is null until the first scrape. Sitemaps and pages are
+  refreshed every 4 hours.
+- `audits.pendingPages` are waiting for their first audit. `audits.failedPages`
+  failed their last audit and are retried after 4 hours.
+
+**Errors:** `403` not a team member, `404` team not found, `409` max sites
+reached.
 
 ---
 
@@ -364,9 +387,9 @@ List sites. Optionally filter by team.
 
 **Query parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| teamId | string | no | Filter by team |
+| Param  | Type   | Required | Description    |
+| ------ | ------ | -------- | -------------- |
+| teamId | string | no       | Filter by team |
 
 **Response:** `200`
 
@@ -378,7 +401,9 @@ List sites. Optionally filter by team.
       "teamId": "string",
       "domain": "string",
       "sitemapPath": "string",
-      "hasScrapedTheSitemap": false,
+      "status": "pending | ready | failed",
+      "sitemap": { ... },
+      "audits": { ... },
       "createdAt": "ISO 8601"
     }
   ]
@@ -405,14 +430,15 @@ Get a single site.
 
 ### PUT `/sites/:id`
 
-Update a site's domain or sitemap path.
+Update a site's domain or sitemap path. Changing either one resets
+`sitemap.status` to `pending` and queues a new scrape.
 
 **Request body:**
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| domain | string | no | 1-255 characters |
-| sitemapPath | string | no | 1-255 characters |
+| Field       | Type   | Required | Constraints      |
+| ----------- | ------ | -------- | ---------------- |
+| domain      | string | no       | 1-255 characters |
+| sitemapPath | string | no       | 1-255 characters |
 
 **Response:** `200`
 
@@ -452,10 +478,10 @@ List pages. Optionally filter by site and search by URL/path.
 
 **Query parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| siteId | string | no | Filter by site |
-| search | string | no | Regex search on URL or path (case-insensitive) |
+| Param  | Type   | Required | Description                                    |
+| ------ | ------ | -------- | ---------------------------------------------- |
+| siteId | string | no       | Filter by site                                 |
+| search | string | no       | Regex search on URL or path (case-insensitive) |
 
 **Response:** `200`
 
@@ -467,13 +493,22 @@ List pages. Optionally filter by site and search by URL/path.
       "siteId": "string",
       "path": "string",
       "url": "string",
+      "auditStatus": "pending | completed | failed",
+      "auditError": "string | null",
       "lastAuditedAt": "ISO 8601 | null",
+      "nextAuditAt": "ISO 8601 | null",
       "auditReport": "PageAuditReport | null",
       "createdAt": "ISO 8601"
     }
   ]
 }
 ```
+
+- `auditStatus` is `pending` until the first audit runs, and `failed` when the
+  last audit failed (see `auditError`).
+- A failed audit keeps the last successful `auditReport`.
+- `nextAuditAt` is null until the first audit. Pages are re-audited every 4
+  hours.
 
 ---
 
@@ -490,7 +525,10 @@ Get a single page with its full audit report.
     "siteId": "string",
     "path": "string",
     "url": "string",
+    "auditStatus": "pending | completed | failed",
+    "auditError": "string | null",
     "lastAuditedAt": "ISO 8601 | null",
+    "nextAuditAt": "ISO 8601 | null",
     "auditReport": {
       "fetchTime": "ISO 8601",
       "finalUrl": "string",
@@ -535,19 +573,27 @@ All endpoints require `Authorization: Bearer <token>`.
 
 ### GET `/issues`
 
-Aggregated audit failures across pages, sorted by number of affected pages (most widespread first).
+Aggregated audit failures across pages, sorted by number of affected pages (most
+widespread first).
 
 **Query parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| siteId | string | no | Filter by site |
-| category | string | no | One of: `performance`, `accessibility`, `bestPractices`, `seo` |
+| Param    | Type   | Required | Description                                                    |
+| -------- | ------ | -------- | -------------------------------------------------------------- |
+| siteId   | string | no       | Filter by site                                                 |
+| category | string | no       | One of: `performance`, `accessibility`, `bestPractices`, `seo` |
 
 **Response:** `200`
 
 ```json
 {
+  "status": "pending | ready",
+  "audits": {
+    "completedPages": 0,
+    "failedPages": 0,
+    "pendingPages": 0,
+    "totalPages": 0
+  },
   "issues": [
     {
       "auditId": "string",
@@ -567,6 +613,9 @@ Aggregated audit failures across pages, sorted by number of affected pages (most
 }
 ```
 
+- `status` is `pending` while a sitemap hasn't been scraped yet or pages are
+  waiting for their first audit. The issue list is incomplete until it's
+  `ready`.
 - Issues sorted by number of affected pages (descending).
 - Pages within each issue sorted by score (ascending — worst scores first).
 - Scores range from `0` (fail) to `1` (pass).
@@ -579,11 +628,11 @@ Aggregated audit failures across pages, sorted by number of affected pages (most
 
 Per-IP rate limits apply to all routes:
 
-| Route prefix | Requests | Window |
-|-------------|----------|--------|
-| `/auth/*` | 10 | 60 seconds |
-| `/teams/*` | 60 | 60 seconds |
-| `/sites/*` | 60 | 60 seconds |
-| `/pages/*` | 60 | 60 seconds |
-| `/issues/*` | 60 | 60 seconds |
-| `/api-keys/*` | 60 | 60 seconds |
+| Route prefix  | Requests | Window     |
+| ------------- | -------- | ---------- |
+| `/auth/*`     | 10       | 60 seconds |
+| `/teams/*`    | 60       | 60 seconds |
+| `/sites/*`    | 60       | 60 seconds |
+| `/pages/*`    | 60       | 60 seconds |
+| `/issues/*`   | 60       | 60 seconds |
+| `/api-keys/*` | 60       | 60 seconds |

@@ -3,12 +3,27 @@ import { describe, expect, it } from 'vitest'
 import {
   app,
   createAuthToken,
+  createTestPage,
   createTestSite,
   createTestTeam,
   createTestUser,
   mockExecutionContext,
   testEnvironment
 } from '../test-helpers'
+
+const noAudits = {
+  completedPages: 0,
+  failedPages: 0,
+  pendingPages: 0,
+  totalPages: 0
+}
+
+const pendingSitemap = {
+  error: null,
+  lastScrapedAt: null,
+  nextScrapeAt: null,
+  status: 'pending'
+}
 
 async function authenticatedRequest(
   path: string,
@@ -44,11 +59,13 @@ describe('POST /sites', () => {
     expect(response.status).toEqual(201)
     expect(await response.json()).toEqual({
       site: {
+        audits: noAudits,
         createdAt: expect.any(String),
         domain: 'www.bitesized.app',
-        hasScrapedTheSitemap: false,
         id: expect.any(String),
+        sitemap: pendingSitemap,
         sitemapPath: '/sitemap.xml',
+        status: 'pending',
         teamId: team.id
       }
     })
@@ -263,13 +280,118 @@ describe('GET /sites/:id', () => {
     expect(response.status).toEqual(200)
     expect(await response.json()).toEqual({
       site: {
+        audits: noAudits,
         createdAt: expect.any(String),
         domain: 'example.com',
-        hasScrapedTheSitemap: false,
         id: site.id,
+        sitemap: pendingSitemap,
         sitemapPath: '/sitemap.xml',
+        status: 'pending',
         teamId: team.id
       }
+    })
+  })
+
+  it('is pending while pages are waiting for an audit', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id, { domain: 'example.com' })
+
+    site.lastScrapedSitemapAt = Date.UTC(2026, 9, 8, 12, 0, 0)
+    await site.save()
+
+    const audited = await createTestPage(site.id, { path: '/audited' })
+    await createTestPage(site.id, { path: '/waiting' })
+
+    audited.lastAuditedAt = Date.UTC(2026, 9, 8, 12, 5, 0)
+    await audited.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, { token })
+
+    expect(await response.json()).toEqual({
+      site: {
+        audits: {
+          completedPages: 1,
+          failedPages: 0,
+          pendingPages: 1,
+          totalPages: 2
+        },
+        createdAt: expect.any(String),
+        domain: 'example.com',
+        id: site.id,
+        sitemap: {
+          error: null,
+          lastScrapedAt: '2026-10-08T12:00:00.000Z',
+          nextScrapeAt: '2026-10-08T16:00:00.000Z',
+          status: 'completed'
+        },
+        sitemapPath: '/sitemap.xml',
+        status: 'pending',
+        teamId: team.id
+      }
+    })
+  })
+
+  it('is ready once every page has been audited', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+
+    site.lastScrapedSitemapAt = Date.UTC(2026, 9, 8, 12, 0, 0)
+    await site.save()
+
+    const completed = await createTestPage(site.id, { path: '/completed' })
+    const failed = await createTestPage(site.id, { path: '/failed' })
+
+    completed.lastAuditedAt = Date.UTC(2026, 9, 8, 12, 5, 0)
+    await completed.save()
+
+    failed.lastAuditedAt = Date.UTC(2026, 9, 8, 12, 5, 0)
+    failed.auditError = 'Timeout auditing https://example.com/failed'
+    await failed.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, { token })
+    const body = (await response.json()) as {
+      site: { audits: unknown; status: string }
+    }
+
+    expect({ audits: body.site.audits, status: body.site.status }).toEqual({
+      audits: {
+        completedPages: 1,
+        failedPages: 1,
+        pendingPages: 0,
+        totalPages: 2
+      },
+      status: 'ready'
+    })
+  })
+
+  it('is failed when the sitemap could not be scraped', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+
+    site.lastScrapedSitemapAt = Date.UTC(2026, 9, 8, 12, 0, 0)
+    site.scrapeSitemapError =
+      'HTTP 404 fetching https://example.com/sitemap.xml'
+    await site.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, { token })
+    const body = (await response.json()) as {
+      site: { sitemap: unknown; status: string }
+    }
+
+    expect({ sitemap: body.site.sitemap, status: body.site.status }).toEqual({
+      sitemap: {
+        error: 'HTTP 404 fetching https://example.com/sitemap.xml',
+        lastScrapedAt: '2026-10-08T12:00:00.000Z',
+        nextScrapeAt: '2026-10-08T16:00:00.000Z',
+        status: 'failed'
+      },
+      status: 'failed'
     })
   })
 
@@ -341,6 +463,54 @@ describe('PUT /sites/:id', () => {
 
     expect(updated.domain).toEqual('example.com')
     expect(updated.sitemapPath).toEqual('/new-sitemap.xml')
+  })
+
+  it('queues a new scrape when the domain changes', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id, { domain: 'old.com' })
+
+    site.lastScrapedSitemapAt = Date.UTC(2026, 9, 8, 12, 0, 0)
+    site.scrapeSitemapError = 'HTTP 404 fetching https://old.com/sitemap.xml'
+    await site.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, {
+      method: 'PUT',
+      body: { domain: 'new.com' },
+      token
+    })
+
+    const body = (await response.json()) as {
+      site: { sitemap: unknown; status: string }
+    }
+
+    expect({ sitemap: body.site.sitemap, status: body.site.status }).toEqual({
+      sitemap: pendingSitemap,
+      status: 'pending'
+    })
+  })
+
+  it('keeps the scrape state when nothing about the sitemap changes', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id, { domain: 'example.com' })
+
+    site.lastScrapedSitemapAt = Date.UTC(2026, 9, 8, 12, 0, 0)
+    await site.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, {
+      method: 'PUT',
+      body: { domain: 'example.com' },
+      token
+    })
+
+    const body = (await response.json()) as {
+      site: { sitemap: { status: string } }
+    }
+
+    expect(body.site.sitemap.status).toEqual('completed')
   })
 
   it('returns 403 when not a member', async () => {
