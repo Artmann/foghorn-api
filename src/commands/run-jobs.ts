@@ -1,9 +1,12 @@
 import 'dotenv/config'
 
+import { hostname } from 'node:os'
+
 import { program } from 'commander'
 import { connectionHandler } from 'esix'
 
 import { findPagesDueForAudit, findSitesDueForScrape } from '../lib/job-queue'
+import { startHeartbeat } from '../lib/job-runner-heartbeat'
 import { Logger } from '../lib/logger'
 import { runPool } from '../lib/run-pool'
 import { sleep } from '../lib/sleep'
@@ -120,32 +123,37 @@ async function main(): Promise<void> {
   })
 
   const signal = stopController.signal
+  const stopHeartbeat = await startHeartbeat(hostname(), logger)
 
-  while (!signal.aborted) {
-    let result: CycleResult = { rateLimited: false, workCount: 0 }
+  try {
+    while (!signal.aborted) {
+      let result: CycleResult = { rateLimited: false, workCount: 0 }
 
-    try {
-      result = await runCycle(signal)
-    } catch (error) {
-      logger.error('Job cycle failed. Retrying after the idle delay.', {
-        error: error instanceof Error ? error.message : String(error)
-      })
+      try {
+        result = await runCycle(signal)
+      } catch (error) {
+        logger.error('Job cycle failed. Retrying after the idle delay.', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+
+      await logger.flush()
+
+      if (runOnce) {
+        break
+      }
+
+      if (result.rateLimited) {
+        logger.warn(
+          `Pausing audits for ${rateLimitDelayMs / 1000} seconds because of rate limiting.`
+        )
+        await sleep(rateLimitDelayMs, signal)
+      } else if (result.workCount === 0) {
+        await sleep(idleDelayMs, signal)
+      }
     }
-
-    await logger.flush()
-
-    if (runOnce) {
-      break
-    }
-
-    if (result.rateLimited) {
-      logger.warn(
-        `Pausing audits for ${rateLimitDelayMs / 1000} seconds because of rate limiting.`
-      )
-      await sleep(rateLimitDelayMs, signal)
-    } else if (result.workCount === 0) {
-      await sleep(idleDelayMs, signal)
-    }
+  } finally {
+    await stopHeartbeat()
   }
 
   logger.info('Job runner stopped.')

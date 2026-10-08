@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Logger } from '../lib/logger'
 import { Page } from '../models/page'
+import { Site } from '../models/site'
 import {
   createTestPage,
   createTestSite,
@@ -22,20 +23,61 @@ function buildSitemapXml(urls: string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?><urlset>${entries}</urlset>`
 }
 
+function mockSitemap(urls: string[]) {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    new Response(buildSitemapXml(urls), { status: 200 })
+  )
+}
+
+async function setupSite(domain = 'example.com') {
+  const { user } = await createTestUser()
+  const team = await createTestTeam(user.id)
+
+  return createTestSite(team.id, { domain, sitemapPath: '/sitemap.xml' })
+}
+
+async function getPageUrls(siteId: string) {
+  const pages = await Page.where('siteId', siteId).get()
+
+  return pages.map((page) => page.url).sort()
+}
+
+async function reloadSite(site: Site) {
+  const reloaded = await Site.find(site.id)
+
+  return {
+    lastScrapedSitemapAt: reloaded?.lastScrapedSitemapAt,
+    scrapeSitemapError: reloaded?.scrapeSitemapError,
+    scrapeStartedAt: reloaded?.scrapeStartedAt
+  }
+}
+
 describe('scrapeSite', () => {
   it('exports MAX_PAGES_PER_SITE as 250', () => {
     expect(MAX_PAGES_PER_SITE).toEqual(250)
   })
 
-  it('limits pages scraped per site', async () => {
-    const { user } = await createTestUser()
-    const team = await createTestTeam(user.id)
-    const site = await createTestSite(team.id, {
-      domain: 'example.com',
-      sitemapPath: '/sitemap.xml'
-    })
+  it('creates pages from the sitemap and records the scrape', async () => {
+    const site = await setupSite()
 
-    // Pre-fill with 3 existing pages.
+    mockSitemap(['https://example.com/', 'https://example.com/about'])
+
+    await scrapeSite(site, mockLogger)
+
+    expect(await getPageUrls(site.id)).toEqual([
+      'https://example.com/',
+      'https://example.com/about'
+    ])
+    expect(await reloadSite(site)).toEqual({
+      lastScrapedSitemapAt: expect.any(Number),
+      scrapeSitemapError: null,
+      scrapeStartedAt: null
+    })
+  })
+
+  it('limits pages scraped per site', async () => {
+    const site = await setupSite()
+
     for (let i = 0; i < 3; i++) {
       await createTestPage(site.id, {
         path: `/existing-${i}`,
@@ -43,48 +85,125 @@ describe('scrapeSite', () => {
       })
     }
 
-    // Sitemap returns 5 new URLs, but maxPages is 5 so only 2 slots remain.
-    const sitemapUrls = Array.from(
+    // 3 existing pages are still in the sitemap and 5 are new, but maxPages
+    // is 5, so only 2 new pages fit.
+    const existingUrls = Array.from(
+      { length: 3 },
+      (_, i) => `https://example.com/existing-${i}`
+    )
+    const newUrls = Array.from(
       { length: 5 },
       (_, i) => `https://example.com/new-${i}`
     )
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(buildSitemapXml(sitemapUrls), { status: 200 })
-    )
+    mockSitemap([...existingUrls, ...newUrls])
 
     await scrapeSite(site, mockLogger, 5)
 
-    const pages = await Page.where('siteId', site.id).get()
-    // 3 existing + 2 new = 5 (the max)
-    expect(pages).toHaveLength(5)
+    expect(await getPageUrls(site.id)).toEqual([
+      ...existingUrls,
+      'https://example.com/new-0',
+      'https://example.com/new-1'
+    ])
   })
 
   it('creates no pages when site already at limit', async () => {
-    const { user } = await createTestUser()
-    const team = await createTestTeam(user.id)
-    const site = await createTestSite(team.id, {
-      domain: 'full.example.com',
-      sitemapPath: '/sitemap.xml'
-    })
+    const site = await setupSite('full.example.com')
+    const existingUrls = Array.from(
+      { length: 3 },
+      (_, i) => `https://full.example.com/page-${i}`
+    )
 
-    // Pre-fill with 3 pages, which equals our test limit.
-    for (let i = 0; i < 3; i++) {
-      await createTestPage(site.id, {
-        path: `/page-${i}`,
-        url: `https://full.example.com/page-${i}`
-      })
+    for (const url of existingUrls) {
+      await createTestPage(site.id, { path: new URL(url).pathname, url })
     }
 
-    const sitemapUrls = ['https://full.example.com/extra-1']
-
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(buildSitemapXml(sitemapUrls), { status: 200 })
-    )
+    mockSitemap([...existingUrls, 'https://full.example.com/extra-1'])
 
     await scrapeSite(site, mockLogger, 3)
 
-    const pages = await Page.where('siteId', site.id).get()
-    expect(pages).toHaveLength(3)
+    expect(await getPageUrls(site.id)).toEqual(existingUrls)
+  })
+
+  it('removes pages that are no longer in the sitemap', async () => {
+    const site = await setupSite()
+
+    await createTestPage(site.id, {
+      path: '/kept',
+      url: 'https://example.com/kept'
+    })
+    await createTestPage(site.id, {
+      path: '/removed',
+      url: 'https://example.com/removed'
+    })
+
+    mockSitemap(['https://example.com/kept', 'https://example.com/new'])
+
+    await scrapeSite(site, mockLogger)
+
+    expect(await getPageUrls(site.id)).toEqual([
+      'https://example.com/kept',
+      'https://example.com/new'
+    ])
+  })
+
+  it('replaces pages from an old domain', async () => {
+    const site = await setupSite('new.example.com')
+
+    await createTestPage(site.id, {
+      path: '/about',
+      url: 'https://old.example.com/about'
+    })
+
+    mockSitemap(['https://new.example.com/about'])
+
+    await scrapeSite(site, mockLogger)
+
+    expect(await getPageUrls(site.id)).toEqual([
+      'https://new.example.com/about'
+    ])
+  })
+
+  it('keeps pages and records an error when the sitemap is empty', async () => {
+    const site = await setupSite()
+
+    await createTestPage(site.id, {
+      path: '/about',
+      url: 'https://example.com/about'
+    })
+
+    mockSitemap([])
+
+    await scrapeSite(site, mockLogger)
+
+    expect(await getPageUrls(site.id)).toEqual(['https://example.com/about'])
+    expect(await reloadSite(site)).toEqual({
+      lastScrapedSitemapAt: expect.any(Number),
+      scrapeSitemapError:
+        'The sitemap at https://example.com/sitemap.xml has no URLs. Check that the sitemap path points to the right file.',
+      scrapeStartedAt: null
+    })
+  })
+
+  it('keeps pages and records an error when the sitemap fails', async () => {
+    const site = await setupSite()
+
+    await createTestPage(site.id, {
+      path: '/about',
+      url: 'https://example.com/about'
+    })
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('Not found', { status: 404 })
+    )
+
+    await scrapeSite(site, mockLogger)
+
+    expect(await getPageUrls(site.id)).toEqual(['https://example.com/about'])
+    expect(await reloadSite(site)).toEqual({
+      lastScrapedSitemapAt: expect.any(Number),
+      scrapeSitemapError: 'HTTP 404 fetching https://example.com/sitemap.xml',
+      scrapeStartedAt: null
+    })
   })
 })

@@ -92,6 +92,21 @@ describe('GET /pages/:id', () => {
   })
 })
 
+describe('GET /pages/:id while running', () => {
+  it('shows a page that is being audited as running', async () => {
+    const { site, token } = await setup()
+    const page = await createTestPage(site.id)
+
+    page.auditStartedAt = Date.now()
+    await page.save()
+
+    const response = await authenticatedRequest(`/pages/${page.id}`, { token })
+    const body = (await response.json()) as { page: { auditStatus: string } }
+
+    expect(body.page.auditStatus).toEqual('running')
+  })
+})
+
 describe('GET /pages', () => {
   it('includes the audit status of each page', async () => {
     const { site, token } = await setup()

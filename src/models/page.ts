@@ -59,13 +59,22 @@ export class Page extends BaseModel {
   public lastAuditedAt: number | null = null
   public auditError: string | null = null
   public auditReport: PageAuditReport | null = null
+  // Set while a runner is auditing the page. See `jobLeaseMs`.
+  public auditStartedAt: number | null = null
 }
 
-export function toPageDto(page: Page): PageDto {
+export function toPageDto(page: Page, now: number): PageDto {
   return {
     auditError: page.auditError,
     auditReport: page.auditReport,
-    auditStatus: getJobStatus(page.lastAuditedAt, page.auditError),
+    auditStatus: getJobStatus(
+      {
+        error: page.auditError,
+        lastRunAt: page.lastAuditedAt,
+        startedAt: page.auditStartedAt
+      },
+      now
+    ),
     createdAt: timestampToDateTime(page.createdAt),
     id: page.id,
     lastAuditedAt:

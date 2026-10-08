@@ -17,6 +17,32 @@ Unauthorized, `403` Forbidden, `404` Not found, `409` Conflict.
 
 ---
 
+## Health
+
+### GET `/`
+
+Health check. No auth required. Also reports whether a job runner is processing
+sites.
+
+**Response:** `200`
+
+```json
+{
+  "service": "foghorn-api",
+  "status": "ok",
+  "jobRunner": {
+    "status": "online | offline | unknown",
+    "lastSeenAt": "ISO 8601 | null"
+  }
+}
+```
+
+- `jobRunner.status` is `online` when a job runner has checked in during the
+  last 2 minutes. While it's `offline`, pending sites and pages don't make
+  progress.
+
+---
+
 ## Authentication
 
 ### POST `/auth/sign-up`
@@ -352,7 +378,7 @@ Add a site to a team. Max 10 sites per team.
     "sitemapPath": "string",
     "status": "pending | ready | failed",
     "sitemap": {
-      "status": "pending | completed | failed",
+      "status": "pending | running | completed | failed",
       "error": "string | null",
       "lastScrapedAt": "ISO 8601 | null",
       "nextScrapeAt": "ISO 8601 | null"
@@ -361,6 +387,7 @@ Add a site to a team. Max 10 sites per team.
       "completedPages": 0,
       "failedPages": 0,
       "pendingPages": 0,
+      "runningPages": 0,
       "totalPages": 0
     },
     "createdAt": "ISO 8601"
@@ -368,13 +395,16 @@ Add a site to a team. Max 10 sites per team.
 }
 ```
 
-- `status` is `pending` while the sitemap or any page is waiting to be
-  processed, `failed` when the sitemap could not be scraped and there are no
-  pages, and `ready` otherwise.
+- `status` is `pending` until the sitemap has been scraped and every page has
+  been audited once, `failed` when the sitemap could not be scraped and there
+  are no pages, and `ready` otherwise. Later refreshes keep the site `ready`.
+- `sitemap.status` is `running` while a scrape is in progress.
 - `sitemap.nextScrapeAt` is null until the first scrape. Sitemaps and pages are
   refreshed every 4 hours.
-- `audits.pendingPages` are waiting for their first audit. `audits.failedPages`
-  failed their last audit and are retried after 4 hours.
+- `audits.pendingPages` are waiting for their first audit. `audits.runningPages`
+  are being audited right now. `audits.failedPages` failed their last audit and
+  are retried after 4 hours.
+- Pages that are no longer in the sitemap are removed on the next scrape.
 
 **Errors:** `403` not a team member, `404` team not found, `409` max sites
 reached.
@@ -493,7 +523,7 @@ List pages. Optionally filter by site and search by URL/path.
       "siteId": "string",
       "path": "string",
       "url": "string",
-      "auditStatus": "pending | completed | failed",
+      "auditStatus": "pending | running | completed | failed",
       "auditError": "string | null",
       "lastAuditedAt": "ISO 8601 | null",
       "nextAuditAt": "ISO 8601 | null",
@@ -504,8 +534,9 @@ List pages. Optionally filter by site and search by URL/path.
 }
 ```
 
-- `auditStatus` is `pending` until the first audit runs, and `failed` when the
-  last audit failed (see `auditError`).
+- `auditStatus` is `pending` until the first audit runs, `running` while an
+  audit is in progress, and `failed` when the last audit failed (see
+  `auditError`).
 - A failed audit keeps the last successful `auditReport`.
 - `nextAuditAt` is null until the first audit. Pages are re-audited every 4
   hours.
@@ -525,7 +556,7 @@ Get a single page with its full audit report.
     "siteId": "string",
     "path": "string",
     "url": "string",
-    "auditStatus": "pending | completed | failed",
+    "auditStatus": "pending | running | completed | failed",
     "auditError": "string | null",
     "lastAuditedAt": "ISO 8601 | null",
     "nextAuditAt": "ISO 8601 | null",
@@ -592,6 +623,7 @@ widespread first).
     "completedPages": 0,
     "failedPages": 0,
     "pendingPages": 0,
+    "runningPages": 0,
     "totalPages": 0
   },
   "issues": [

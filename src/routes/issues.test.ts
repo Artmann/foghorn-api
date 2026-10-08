@@ -536,6 +536,7 @@ describe('GET /issues status', () => {
         completedPages: 0,
         failedPages: 0,
         pendingPages: 0,
+        runningPages: 0,
         totalPages: 0
       },
       issues: [],
@@ -563,6 +564,7 @@ describe('GET /issues status', () => {
         completedPages: 1,
         failedPages: 0,
         pendingPages: 1,
+        runningPages: 0,
         totalPages: 2
       },
       issues: [],
@@ -589,6 +591,7 @@ describe('GET /issues status', () => {
         completedPages: 1,
         failedPages: 0,
         pendingPages: 0,
+        runningPages: 0,
         totalPages: 1
       },
       issues: [],

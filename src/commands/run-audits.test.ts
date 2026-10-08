@@ -66,6 +66,7 @@ async function reload(page: Page) {
   return {
     auditError: reloaded?.auditError,
     auditReport: reloaded?.auditReport,
+    auditStartedAt: reloaded?.auditStartedAt,
     lastAuditedAt: reloaded?.lastAuditedAt
   }
 }
@@ -107,6 +108,7 @@ describe('auditPages', () => {
         },
         seo: { audits: [], score: 1 }
       },
+      auditStartedAt: null,
       lastAuditedAt: expect.any(Number)
     })
   })
@@ -127,6 +129,7 @@ describe('auditPages', () => {
     expect(await reload(page)).toEqual({
       auditError: 'HTTP 500 auditing https://example.com/page-0',
       auditReport: null,
+      auditStartedAt: null,
       lastAuditedAt: expect.any(Number)
     })
   })
@@ -150,6 +153,7 @@ describe('auditPages', () => {
       expect(await reload(page)).toEqual({
         auditError: null,
         auditReport: null,
+        auditStartedAt: null,
         lastAuditedAt: null
       })
     }

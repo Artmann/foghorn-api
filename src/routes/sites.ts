@@ -43,7 +43,9 @@ async function requireTeamMembership(
 }
 
 async function buildSiteDto(site: Site): Promise<SiteDto> {
-  return toSiteDto(site, await countSiteAudits(site.id))
+  const now = Date.now()
+
+  return toSiteDto(site, await countSiteAudits(site.id, now), now)
 }
 
 // Create a site.

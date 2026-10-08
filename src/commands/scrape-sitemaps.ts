@@ -5,7 +5,12 @@ import dayjs from 'dayjs'
 import { connectionHandler } from 'esix'
 import { XMLParser } from 'fast-xml-parser'
 
-import { findSitesDueForScrape } from '../lib/job-queue'
+import {
+  findPageUrls,
+  findSitesDueForScrape,
+  markScrapeFinished,
+  markScrapeStarted
+} from '../lib/job-queue'
 import { Logger } from '../lib/logger'
 import { runPool } from '../lib/run-pool'
 import { Page } from '../models/page'
@@ -78,40 +83,83 @@ export async function scrapeSite(
 ): Promise<void> {
   logger.info(`Scraping ${site.domain}${site.sitemapPath}...`)
 
+  await markScrapeStarted(site.id, dayjs().valueOf())
+
+  let scrapeSitemapError: string | null = null
+
   try {
-    const url = `https://${site.domain}${site.sitemapPath}`
-    const allPages = await fetchSitemap(url)
+    const sitemapUrl = `https://${site.domain}${site.sitemapPath}`
+    const urls = await fetchSitemap(sitemapUrl)
 
-    const existingPages = await Page.where('siteId', site.id).get()
-    const remainingSlots = Math.max(0, maxPages - existingPages.length)
-    const pages = allPages.slice(0, remainingSlots)
-
-    for (const pageUrl of pages) {
-      const path = new URL(pageUrl).pathname
-
-      const existing = await Page.where('siteId', site.id)
-        .where('path', path)
-        .first()
-
-      if (!existing) {
-        await Page.create({ siteId: site.id, path, url: pageUrl })
-      }
+    // An empty sitemap is almost always a broken one. Don't delete every page
+    // because of it.
+    if (urls.length === 0) {
+      throw new Error(
+        `The sitemap at ${sitemapUrl} has no URLs. Check that the sitemap path points to the right file.`
+      )
     }
 
-    logger.info(`Found ${pages.length} pages for ${site.domain}`)
+    const { added, removed } = await syncPages(site, urls, maxPages)
 
-    site.lastScrapedSitemapAt = dayjs().valueOf()
-    site.scrapeSitemapError = null
-    await site.save()
+    logger.info(
+      `Found ${urls.length} URLs for ${site.domain}. Added ${added} pages and removed ${removed}.`
+    )
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    scrapeSitemapError =
+      error instanceof Error ? error.message : 'Unknown error'
 
-    logger.error(`Error scraping ${site.domain}: ${message}`)
-
-    site.lastScrapedSitemapAt = dayjs().valueOf()
-    site.scrapeSitemapError = message
-    await site.save()
+    logger.error(`Error scraping ${site.domain}: ${scrapeSitemapError}`)
   }
+
+  await markScrapeFinished(site, {
+    lastScrapedSitemapAt: dayjs().valueOf(),
+    scrapeSitemapError
+  })
+}
+
+// Makes the site's pages match the sitemap: removes pages that are no longer
+// in it (or belong to an old domain) and adds new ones up to `maxPages`.
+async function syncPages(
+  site: Site,
+  urls: string[],
+  maxPages: number
+): Promise<{ added: number; removed: number }> {
+  const sitemapUrls = new Set(urls)
+  const existingPages = await findPageUrls(site.id)
+
+  const removedIds = existingPages
+    .filter((page) => !sitemapUrls.has(page.url))
+    .map((page) => page.id)
+
+  if (removedIds.length > 0) {
+    await Page.whereIn('id', removedIds).delete()
+  }
+
+  const keptPaths = new Set(
+    existingPages
+      .filter((page) => sitemapUrls.has(page.url))
+      .map((page) => page.path)
+  )
+
+  // Keep the first URL for each path, in sitemap order.
+  const newPages = new Map<string, string>()
+
+  for (const url of urls) {
+    const path = new URL(url).pathname
+
+    if (!keptPaths.has(path) && !newPages.has(path)) {
+      newPages.set(path, url)
+    }
+  }
+
+  const remainingSlots = Math.max(0, maxPages - keptPaths.size)
+  const pagesToAdd = [...newPages].slice(0, remainingSlots)
+
+  for (const [path, url] of pagesToAdd) {
+    await Page.create({ siteId: site.id, path, url })
+  }
+
+  return { added: pagesToAdd.length, removed: removedIds.length }
 }
 
 if (import.meta.main) {

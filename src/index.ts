@@ -7,6 +7,10 @@ import { secureHeaders } from 'hono/secure-headers'
 import { connectionHandler } from 'esix'
 
 import { ApiError } from './lib/api-error'
+import {
+  getJobRunnerStatus,
+  type JobRunnerStatusDto
+} from './lib/job-runner-heartbeat'
 import { rateLimiter } from './middleware/rate-limit'
 import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
@@ -98,9 +102,22 @@ app.onError((error, context) => {
   )
 })
 
-// Health check.
-app.get('/', (context) => {
-  return context.json({ service: 'foghorn-api', status: 'ok' })
+// Health check. Also tells clients whether a job runner is processing sites,
+// so a `pending` site can be told apart from one nobody is working on.
+app.get('/', async (context) => {
+  let jobRunner: JobRunnerStatusDto | { lastSeenAt: null; status: 'unknown' }
+
+  try {
+    jobRunner = await getJobRunnerStatus(Date.now())
+  } catch (error) {
+    context.get('logger').error('Could not read the job runner status.', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+
+    jobRunner = { lastSeenAt: null, status: 'unknown' }
+  }
+
+  return context.json({ jobRunner, service: 'foghorn-api', status: 'ok' })
 })
 
 // Routes.

@@ -134,25 +134,38 @@ The site includes its processing state:
     "audits": {
       "completedPages": 12,
       "failedPages": 1,
-      "pendingPages": 37,
+      "pendingPages": 32,
+      "runningPages": 5,
       "totalPages": 50
     }
   }
 }
 ```
 
-- `status: "pending"` — the sitemap or some pages are still waiting. Tell the
-  user how far along it is (for example "12 of 50 pages audited") and check
-  again later. Don't poll in a tight loop; once every few minutes is enough.
+- `status: "pending"` — the sitemap or some pages haven't been processed yet.
+  Tell the user how far along it is (for example "12 of 50 pages audited") and
+  check again later. Don't poll in a tight loop; once every few minutes is
+  enough.
 - `status: "ready"` — everything has been audited at least once. Issues are
   complete.
 - `status: "failed"` — the sitemap could not be scraped. Show `sitemap.error` to
   the user. Usually the sitemap path is wrong; fix it with `PUT /sites/SITE_ID`
   and a new `sitemapPath`, which queues a new scrape.
 
-Each page has its own `auditStatus` (`pending`, `completed` or `failed`) and
-`auditError`. Sitemaps and pages are refreshed every 4 hours (`nextScrapeAt`,
-`nextAuditAt`).
+`sitemap.status` and each page's `auditStatus` are `pending`, `running`,
+`completed` or `failed`. Sitemaps and pages are refreshed every 4 hours
+(`nextScrapeAt`, `nextAuditAt`).
+
+If a site stays `pending` with no `runningPages`, check whether anything is
+processing jobs:
+
+```bash
+curl -s https://foghorn-api.artgaard.workers.dev/
+```
+
+If `jobRunner.status` is `offline`, no job runner is running, and the site won't
+make progress until one starts. Tell the user that processing is paused instead
+of waiting.
 
 ## Querying Issues
 
@@ -179,6 +192,7 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
     "completedPages": 50,
     "failedPages": 0,
     "pendingPages": 0,
+    "runningPages": 0,
     "totalPages": 50
   },
   "issues": [

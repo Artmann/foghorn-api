@@ -1,6 +1,7 @@
 import { BaseModel } from 'esix'
 import { z } from 'zod'
 
+import type { SiteAuditCounts } from '../lib/job-queue'
 import {
   getJobStatus,
   getNextRunAt,
@@ -65,12 +66,22 @@ export class Site extends BaseModel {
   public sitemapPath = '/sitemap.xml'
   public lastScrapedSitemapAt: number | null = null
   public scrapeSitemapError: string | null = null
+  // Set while a runner is scraping the sitemap. See `jobLeaseMs`.
+  public scrapeStartedAt: number | null = null
 }
 
-export function toSiteDto(site: Site, audits: AuditProgress): SiteDto {
+export function toSiteDto(
+  site: Site,
+  { audits, unauditedPages }: SiteAuditCounts,
+  now: number
+): SiteDto {
   const sitemapStatus = getJobStatus(
-    site.lastScrapedSitemapAt,
-    site.scrapeSitemapError
+    {
+      error: site.scrapeSitemapError,
+      lastRunAt: site.lastScrapedSitemapAt,
+      startedAt: site.scrapeStartedAt
+    },
+    now
   )
 
   return {
@@ -88,7 +99,12 @@ export function toSiteDto(site: Site, audits: AuditProgress): SiteDto {
       status: sitemapStatus
     },
     sitemapPath: site.sitemapPath,
-    status: getSiteStatus(sitemapStatus, audits),
+    status: getSiteStatus({
+      hasScrapedSitemap: site.lastScrapedSitemapAt !== null,
+      sitemapStatus,
+      totalPages: audits.totalPages,
+      unauditedPages
+    }),
     teamId: site.teamId
   }
 }

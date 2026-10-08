@@ -10,6 +10,8 @@ export const openapiSpec = {
       get: {
         tags: ['Health'],
         summary: 'Health check',
+        description:
+          'Also reports whether a job runner is processing sites. When `jobRunner.status` is `offline`, pending sites and pages will not make progress.',
         operationId: 'healthCheck',
         responses: {
           '200': {
@@ -20,9 +22,23 @@ export const openapiSpec = {
                   type: 'object',
                   properties: {
                     service: { type: 'string' },
-                    status: { type: 'string' }
+                    status: { type: 'string' },
+                    jobRunner: {
+                      type: 'object',
+                      properties: {
+                        lastSeenAt: {
+                          type: ['string', 'null'],
+                          format: 'date-time'
+                        },
+                        status: {
+                          type: 'string',
+                          enum: ['online', 'offline', 'unknown']
+                        }
+                      },
+                      required: ['lastSeenAt', 'status']
+                    }
                   },
-                  required: ['service', 'status']
+                  required: ['service', 'status', 'jobRunner']
                 }
               }
             }
@@ -1373,12 +1389,17 @@ export const openapiSpec = {
             type: 'integer',
             description: 'Pages waiting for their first audit.'
           },
+          runningPages: {
+            type: 'integer',
+            description: 'Pages being audited right now.'
+          },
           totalPages: { type: 'integer' }
         },
         required: [
           'completedPages',
           'failedPages',
           'pendingPages',
+          'runningPages',
           'totalPages'
         ]
       },
@@ -1398,7 +1419,9 @@ export const openapiSpec = {
           },
           status: {
             type: 'string',
-            enum: ['pending', 'completed', 'failed']
+            enum: ['pending', 'running', 'completed', 'failed'],
+            description:
+              '`pending` until the first scrape runs. `running` while a scrape is in progress. Otherwise the result of the last scrape.'
           }
         },
         required: ['error', 'lastScrapedAt', 'nextScrapeAt', 'status']
@@ -1414,7 +1437,7 @@ export const openapiSpec = {
             type: 'string',
             enum: ['pending', 'ready', 'failed'],
             description:
-              '`pending` while the sitemap or any page is waiting to be processed. `failed` when the sitemap could not be scraped and there are no pages. `ready` otherwise.'
+              '`pending` until the sitemap has been scraped and every page has been audited once. `failed` when the sitemap could not be scraped and there are no pages. `ready` otherwise. Later refreshes keep the site `ready`.'
           },
           sitemap: { $ref: '#/components/schemas/SitemapStatusDto' },
           audits: { $ref: '#/components/schemas/AuditProgressDto' },
@@ -1440,9 +1463,9 @@ export const openapiSpec = {
           url: { type: 'string' },
           auditStatus: {
             type: 'string',
-            enum: ['pending', 'completed', 'failed'],
+            enum: ['pending', 'running', 'completed', 'failed'],
             description:
-              '`pending` until the first audit runs. `failed` when the last audit failed.'
+              '`pending` until the first audit runs. `running` while an audit is in progress. `failed` when the last audit failed.'
           },
           auditError: {
             type: ['string', 'null'],

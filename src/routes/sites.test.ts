@@ -15,6 +15,7 @@ const noAudits = {
   completedPages: 0,
   failedPages: 0,
   pendingPages: 0,
+  runningPages: 0,
   totalPages: 0
 }
 
@@ -315,6 +316,7 @@ describe('GET /sites/:id', () => {
           completedPages: 1,
           failedPages: 0,
           pendingPages: 1,
+          runningPages: 0,
           totalPages: 2
         },
         createdAt: expect.any(String),
@@ -362,10 +364,31 @@ describe('GET /sites/:id', () => {
         completedPages: 1,
         failedPages: 1,
         pendingPages: 0,
+        runningPages: 0,
         totalPages: 2
       },
       status: 'ready'
     })
+  })
+
+  it('shows the first sitemap scrape as running', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+
+    site.scrapeStartedAt = Date.now()
+    await site.save()
+
+    const response = await authenticatedRequest(`/sites/${site.id}`, { token })
+    const body = (await response.json()) as {
+      site: { sitemap: { status: string }; status: string }
+    }
+
+    expect({
+      sitemapStatus: body.site.sitemap.status,
+      status: body.site.status
+    }).toEqual({ sitemapStatus: 'running', status: 'pending' })
   })
 
   it('is failed when the sitemap could not be scraped', async () => {

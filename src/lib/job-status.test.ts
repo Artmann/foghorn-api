@@ -5,7 +5,9 @@ import {
   getNextRunAt,
   getSiteStatus,
   isDue,
+  isRunning,
   jobCooldownMs,
+  jobLeaseMs,
   summarizeAudits
 } from './job-status'
 
@@ -13,15 +15,39 @@ const now = Date.UTC(2026, 9, 8, 12, 0, 0)
 
 describe('getJobStatus', () => {
   it('is pending when the job has never run', () => {
-    expect(getJobStatus(null, null)).toEqual('pending')
+    expect(
+      getJobStatus({ error: null, lastRunAt: null, startedAt: null }, now)
+    ).toEqual('pending')
+  })
+
+  it('is running while the lease is active', () => {
+    expect(
+      getJobStatus({ error: null, lastRunAt: null, startedAt: now - 1000 }, now)
+    ).toEqual('running')
+  })
+
+  it('falls back to the last result when the lease has expired', () => {
+    expect(
+      getJobStatus(
+        { error: null, lastRunAt: null, startedAt: now - jobLeaseMs - 1000 },
+        now
+      )
+    ).toEqual('pending')
   })
 
   it('is failed when the last run had an error', () => {
-    expect(getJobStatus(now, 'HTTP 404 fetching sitemap')).toEqual('failed')
+    expect(
+      getJobStatus(
+        { error: 'HTTP 404 fetching sitemap', lastRunAt: now, startedAt: null },
+        now
+      )
+    ).toEqual('failed')
   })
 
   it('is completed when the last run succeeded', () => {
-    expect(getJobStatus(now, null)).toEqual('completed')
+    expect(
+      getJobStatus({ error: null, lastRunAt: now, startedAt: null }, now)
+    ).toEqual('completed')
   })
 })
 
@@ -36,42 +62,48 @@ describe('getNextRunAt', () => {
 })
 
 describe('getSiteStatus', () => {
-  const noPages = {
-    completedPages: 0,
-    failedPages: 0,
-    pendingPages: 0,
-    totalPages: 0
+  const scraped = {
+    hasScrapedSitemap: true,
+    sitemapStatus: 'completed' as const,
+    totalPages: 2,
+    unauditedPages: 0
   }
 
-  it('is pending while the sitemap is pending', () => {
-    expect(getSiteStatus('pending', noPages)).toEqual('pending')
-  })
-
-  it('is pending while pages are waiting for an audit', () => {
+  it('is pending until the sitemap has been scraped', () => {
     expect(
-      getSiteStatus('completed', { ...noPages, pendingPages: 1, totalPages: 1 })
+      getSiteStatus({
+        hasScrapedSitemap: false,
+        sitemapStatus: 'running',
+        totalPages: 0,
+        unauditedPages: 0
+      })
     ).toEqual('pending')
   })
 
+  it('is pending while pages have never been audited', () => {
+    expect(getSiteStatus({ ...scraped, unauditedPages: 1 })).toEqual('pending')
+  })
+
+  it('stays ready while a later refresh is running', () => {
+    expect(getSiteStatus({ ...scraped, sitemapStatus: 'running' })).toEqual(
+      'ready'
+    )
+  })
+
   it('is failed when the sitemap failed and there are no pages', () => {
-    expect(getSiteStatus('failed', noPages)).toEqual('failed')
+    expect(
+      getSiteStatus({ ...scraped, sitemapStatus: 'failed', totalPages: 0 })
+    ).toEqual('failed')
   })
 
   it('is ready when the sitemap failed but earlier pages are audited', () => {
-    expect(
-      getSiteStatus('failed', { ...noPages, completedPages: 2, totalPages: 2 })
-    ).toEqual('ready')
+    expect(getSiteStatus({ ...scraped, sitemapStatus: 'failed' })).toEqual(
+      'ready'
+    )
   })
 
   it('is ready when every page has been audited', () => {
-    expect(
-      getSiteStatus('completed', {
-        completedPages: 2,
-        failedPages: 1,
-        pendingPages: 0,
-        totalPages: 3
-      })
-    ).toEqual('ready')
+    expect(getSiteStatus(scraped)).toEqual('ready')
   })
 })
 
@@ -89,19 +121,42 @@ describe('isDue', () => {
   })
 })
 
+describe('isRunning', () => {
+  it('is not running without a start time', () => {
+    expect(isRunning(null, now)).toEqual(false)
+  })
+
+  it('is running within the lease', () => {
+    expect(isRunning(now - jobLeaseMs + 1000, now)).toEqual(true)
+  })
+
+  it('is not running after the lease', () => {
+    expect(isRunning(now - jobLeaseMs - 1000, now)).toEqual(false)
+  })
+})
+
 describe('summarizeAudits', () => {
   it('counts pages by audit status', () => {
     expect(
-      summarizeAudits([
-        { auditError: null, lastAuditedAt: null },
-        { auditError: null, lastAuditedAt: now },
-        { auditError: 'Timeout auditing /', lastAuditedAt: now }
-      ])
+      summarizeAudits(
+        [
+          { auditError: null, auditStartedAt: null, lastAuditedAt: null },
+          { auditError: null, auditStartedAt: now, lastAuditedAt: null },
+          { auditError: null, auditStartedAt: null, lastAuditedAt: now },
+          {
+            auditError: 'Timeout auditing /',
+            auditStartedAt: null,
+            lastAuditedAt: now
+          }
+        ],
+        now
+      )
     ).toEqual({
       completedPages: 1,
       failedPages: 1,
       pendingPages: 1,
-      totalPages: 3
+      runningPages: 1,
+      totalPages: 4
     })
   })
 })

@@ -106,12 +106,13 @@ issues.get('/', async (context) => {
 
   // Issues are incomplete while a sitemap hasn't been scraped yet or pages are
   // waiting for their first audit.
-  const audits = summarizeAudits(allPages)
+  const audits = summarizeAudits(allPages, Date.now())
   const hasPendingSitemaps = allSites.some(
     (site) => site.lastScrapedSitemapAt === null
   )
+  const hasUnauditedPages = allPages.some((page) => page.lastAuditedAt === null)
   const status: IssuesStatus =
-    hasPendingSitemaps || audits.pendingPages > 0 ? 'pending' : 'ready'
+    hasPendingSitemaps || hasUnauditedPages ? 'pending' : 'ready'
 
   const categoriesToCheck: Category[] = category
     ? [category as Category]

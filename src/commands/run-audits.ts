@@ -4,7 +4,12 @@ import { program } from 'commander'
 import dayjs from 'dayjs'
 import { connectionHandler } from 'esix'
 
-import { findPagesDueForAudit } from '../lib/job-queue'
+import {
+  findPagesDueForAudit,
+  markAuditFinished,
+  markAuditReleased,
+  markAuditStarted
+} from '../lib/job-queue'
 import { Logger } from '../lib/logger'
 import { runPool } from '../lib/run-pool'
 import {
@@ -96,6 +101,8 @@ function extractCategory(
 export async function auditPage(page: Page, logger: Logger): Promise<void> {
   logger.info(`Auditing ${page.url}...`)
 
+  await markAuditStarted(page.id, dayjs().valueOf())
+
   try {
     const params = new URLSearchParams({
       url: page.url,
@@ -166,10 +173,11 @@ export async function auditPage(page: Page, logger: Logger): Promise<void> {
       )
     }
 
-    page.auditReport = report
-    page.lastAuditedAt = dayjs().valueOf()
-    page.auditError = null
-    await page.save()
+    await markAuditFinished(page.id, {
+      auditError: null,
+      auditReport: report,
+      lastAuditedAt: dayjs().valueOf()
+    })
 
     logger.info(
       `Audited ${page.url} in ${durationMs}ms (performance: ${report.performance.score})`
@@ -178,6 +186,8 @@ export async function auditPage(page: Page, logger: Logger): Promise<void> {
     // Being rate limited says nothing about the page, so leave it as is and
     // let the caller back off.
     if (error instanceof PageSpeedRateLimitError) {
+      await markAuditReleased(page.id)
+
       throw error
     }
 
@@ -185,9 +195,10 @@ export async function auditPage(page: Page, logger: Logger): Promise<void> {
 
     logger.error(`Error auditing ${page.url}: ${message}`)
 
-    page.lastAuditedAt = dayjs().valueOf()
-    page.auditError = message
-    await page.save()
+    await markAuditFinished(page.id, {
+      auditError: message,
+      lastAuditedAt: dayjs().valueOf()
+    })
   }
 }
 

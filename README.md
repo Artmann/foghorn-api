@@ -78,8 +78,8 @@ curl https://foghorn-api.artgaard.workers.dev/sites/<site-id> \
   -H "Authorization: Bearer <token>"
 ```
 
-`status` is `pending` while the sitemap or any page is waiting to be processed,
-and `ready` once everything has been audited. `audits` shows the progress:
+`status` is `pending` until the sitemap has been scraped and every page has been
+audited once, then `ready`. `audits` shows the progress:
 
 ```json
 {
@@ -93,11 +93,15 @@ and `ready` once everything has been audited. `audits` shows the progress:
   "audits": {
     "completedPages": 12,
     "failedPages": 1,
-    "pendingPages": 37,
+    "pendingPages": 32,
+    "runningPages": 5,
     "totalPages": 50
   }
 }
 ```
+
+If nothing moves, check `GET /`. When `jobRunner.status` is `offline`, no job
+runner is processing sites.
 
 ### 6. List issues
 
@@ -295,14 +299,16 @@ GET /sites/:id
 
 Every site includes its processing state:
 
-- `status`: `pending` while the sitemap or any page is waiting to be processed,
-  `failed` when the sitemap could not be scraped and there are no pages, and
-  `ready` otherwise.
-- `sitemap`: `status` (`pending`, `completed` or `failed`), `error`,
+- `status`: `pending` until the sitemap has been scraped and every page has been
+  audited once, `failed` when the sitemap could not be scraped and there are no
+  pages, and `ready` otherwise. Later refreshes keep the site `ready`.
+- `sitemap`: `status` (`pending`, `running`, `completed` or `failed`), `error`,
   `lastScrapedAt` and `nextScrapeAt`.
-- `audits`: `completedPages`, `failedPages`, `pendingPages` and `totalPages`.
+- `audits`: `completedPages`, `failedPages`, `pendingPages`, `runningPages` and
+  `totalPages`.
 
-Sitemaps are scraped and pages audited at most every 4 hours.
+Sitemaps are scraped and pages audited at most every 4 hours. Pages that are no
+longer in the sitemap are removed.
 
 #### Update a site
 
@@ -347,9 +353,9 @@ that site. Otherwise, returns pages across all sites you have access to.
 GET /pages/:id
 ```
 
-Every page includes `auditStatus` (`pending`, `completed` or `failed`),
-`auditError`, `lastAuditedAt` and `nextAuditAt`. A failed audit keeps the last
-successful `auditReport`.
+Every page includes `auditStatus` (`pending`, `running`, `completed` or
+`failed`), `auditError`, `lastAuditedAt` and `nextAuditAt`. A failed audit keeps
+the last successful `auditReport`.
 
 ### Issues
 
@@ -380,7 +386,8 @@ the issue list is incomplete. It's `ready` once everything has been audited.
   "audits": {
     "completedPages": 12,
     "failedPages": 1,
-    "pendingPages": 37,
+    "pendingPages": 32,
+    "runningPages": 5,
     "totalPages": 50
   },
   "issues": []
@@ -394,6 +401,18 @@ the issue list is incomplete. It's `ready` once everything has been audited.
 ```
 GET /
 ```
+
+```json
+{
+  "service": "foghorn-api",
+  "status": "ok",
+  "jobRunner": { "status": "online", "lastSeenAt": "2026-10-08T12:00:00.000Z" }
+}
+```
+
+`jobRunner.status` is `online` when a job runner has checked in during the last
+2 minutes, `offline` when none has, and `unknown` if the status could not be
+read. While it's `offline`, pending sites and pages don't make progress.
 
 #### OpenAPI spec
 

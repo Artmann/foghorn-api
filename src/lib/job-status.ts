@@ -3,7 +3,11 @@ import { timestampToDateTime } from './time'
 // How long to wait before scraping a sitemap or auditing a page again.
 export const jobCooldownMs = 4 * 60 * 60 * 1000
 
-export type JobStatus = 'completed' | 'failed' | 'pending'
+// How long a job counts as running after it started. If the runner crashes,
+// the job goes back to its previous status once the lease expires.
+export const jobLeaseMs = 10 * 60 * 1000
+
+export type JobStatus = 'completed' | 'failed' | 'pending' | 'running'
 
 export type SiteStatus = 'failed' | 'pending' | 'ready'
 
@@ -11,26 +15,38 @@ export interface AuditProgress {
   completedPages: number
   failedPages: number
   pendingPages: number
+  runningPages: number
   totalPages: number
+}
+
+export interface JobState {
+  error: string | null
+  lastRunAt: number | null
+  startedAt: number | null
 }
 
 export function getDueBefore(now: number): number {
   return now - jobCooldownMs
 }
 
-export function getJobStatus(
-  lastRunAt: number | null,
-  error: string | null
-): JobStatus {
-  if (lastRunAt === null) {
+export function getJobStatus(job: JobState, now: number): JobStatus {
+  if (isRunning(job.startedAt, now)) {
+    return 'running'
+  }
+
+  if (job.lastRunAt === null) {
     return 'pending'
   }
 
-  if (error !== null) {
+  if (job.error !== null) {
     return 'failed'
   }
 
   return 'completed'
+}
+
+export function getLeaseCutoff(now: number): number {
+  return now - jobLeaseMs
 }
 
 export function getNextRunAt(lastRunAt: number | null): string | null {
@@ -41,15 +57,24 @@ export function getNextRunAt(lastRunAt: number | null): string | null {
   return timestampToDateTime(lastRunAt + jobCooldownMs)
 }
 
-export function getSiteStatus(
-  sitemapStatus: JobStatus,
-  audits: AuditProgress
-): SiteStatus {
-  if (sitemapStatus === 'pending' || audits.pendingPages > 0) {
+// A site is pending until its sitemap has been scraped and every page has been
+// audited at least once. Later refreshes don't make it pending again.
+export function getSiteStatus({
+  hasScrapedSitemap,
+  sitemapStatus,
+  totalPages,
+  unauditedPages
+}: {
+  hasScrapedSitemap: boolean
+  sitemapStatus: JobStatus
+  totalPages: number
+  unauditedPages: number
+}): SiteStatus {
+  if (!hasScrapedSitemap || unauditedPages > 0) {
     return 'pending'
   }
 
-  if (sitemapStatus === 'failed' && audits.totalPages === 0) {
+  if (sitemapStatus === 'failed' && totalPages === 0) {
     return 'failed'
   }
 
@@ -64,23 +89,42 @@ export function isDue(lastRunAt: number | null, now: number): boolean {
   return lastRunAt < getDueBefore(now)
 }
 
+export function isRunning(startedAt: number | null, now: number): boolean {
+  return startedAt !== null && startedAt > getLeaseCutoff(now)
+}
+
 export function summarizeAudits(
-  pages: { auditError: string | null; lastAuditedAt: number | null }[]
+  pages: {
+    auditError: string | null
+    auditStartedAt: number | null
+    lastAuditedAt: number | null
+  }[],
+  now: number
 ): AuditProgress {
   const progress: AuditProgress = {
     completedPages: 0,
     failedPages: 0,
     pendingPages: 0,
+    runningPages: 0,
     totalPages: pages.length
   }
 
   for (const page of pages) {
-    const status = getJobStatus(page.lastAuditedAt, page.auditError)
+    const status = getJobStatus(
+      {
+        error: page.auditError,
+        lastRunAt: page.lastAuditedAt,
+        startedAt: page.auditStartedAt
+      },
+      now
+    )
 
     if (status === 'completed') {
       progress.completedPages++
     } else if (status === 'failed') {
       progress.failedPages++
+    } else if (status === 'running') {
+      progress.runningPages++
     } else {
       progress.pendingPages++
     }

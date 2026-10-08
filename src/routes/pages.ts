@@ -75,7 +75,9 @@ pages.get('/', async (context) => {
     allPages = allPages.filter((p) => regex.test(p.url) || regex.test(p.path))
   }
 
-  return context.json({ pages: allPages.map(toPageDto) })
+  const now = Date.now()
+
+  return context.json({ pages: allPages.map((page) => toPageDto(page, now)) })
 })
 
 // Get a single page.
@@ -97,7 +99,7 @@ pages.get('/:id', async (context) => {
 
   await requireTeamMembership(site.teamId, auth.userId)
 
-  return context.json({ page: toPageDto(page) })
+  return context.json({ page: toPageDto(page, Date.now()) })
 })
 
 export default pages

@@ -8,13 +8,6 @@
       `PAGESPEED_API_KEY` and `AXIOM_TOKEN`, then run `docker compose up`.
 - [ ] Run it against production and watch the first full pass. Check how long
       250 pages take and whether 5 workers hit PageSpeed's quota.
-- [ ] Show when work is running, not just pending: mark a page or site as
-      `running` when a worker picks it up, with a timeout so a crashed runner
-      doesn't leave it stuck.
-- [ ] Let agents tell "pending" apart from "nothing is processing": record a
-      runner heartbeat and expose it (for example on `GET /`).
-- [ ] Clean up pages that are no longer in the sitemap, or that belong to an old
-      domain after a site's domain changes.
 - [ ] Remove the stale `package-lock.json`. The project uses `bun.lock`.
 
 ### Fix what's out of date
@@ -133,3 +126,7 @@
 - [x] Pending state in the API: `status`, `sitemap` and `audits` on sites,
       `auditStatus` on pages, and `status` and `audits` on issues.
 - [x] Back off when PageSpeed rate limits instead of marking pages as failed.
+- [x] `running` state for sitemap scrapes and audits, with a 10-minute lease so
+      a crashed runner doesn't leave work stuck.
+- [x] Job runner heartbeat, shown as `jobRunner` on `GET /`.
+- [x] Remove pages that are no longer in the sitemap or belong to an old domain.
