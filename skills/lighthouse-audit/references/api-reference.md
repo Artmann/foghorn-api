@@ -7,13 +7,28 @@ All endpoints return JSON. Errors use a consistent shape:
 ```json
 {
   "error": {
-    "message": "Description of what went wrong"
+    "code": "SiteNotFound",
+    "message": "Site not found. List your sites with GET /sites to find the right ID."
   }
 }
 ```
 
-Common status codes: `200` OK, `201` Created, `400` Validation error, `401`
-Unauthorized, `403` Forbidden, `404` Not found, `409` Conflict.
+`code` is stable, so branch on it. `message` says what went wrong and what to do
+about it, so it's safe to show to the user.
+
+| Code               | Status | Meaning                                                     |
+| ------------------ | ------ | ----------------------------------------------------------- |
+| `ValidationFailed` | 400    | The request body or query is invalid. Read `message`.       |
+| `Unauthorized`     | 401    | Missing, invalid or expired token or API key.               |
+| `NotTeamMember`    | 403    | You are not a member of the team.                           |
+| `TeamNotFound`     | 404    | Also `SiteNotFound`, `PageNotFound`, `ApiKeyNotFound`, etc. |
+| `RouteNotFound`    | 404    | There is no such endpoint.                                  |
+| `TeamLimitReached` | 409    | Also `SiteLimitReached`, `AlreadyTeamMember`.               |
+| `RateLimited`      | 429    | Wait for the seconds in the `Retry-After` header.           |
+| `InternalError`    | 500    | A server problem. Try again later.                          |
+
+The full, generated spec (including which errors each endpoint returns) is at
+`GET /openapi`.
 
 ---
 
@@ -508,10 +523,10 @@ List pages. Optionally filter by site and search by URL/path.
 
 **Query parameters:**
 
-| Param  | Type   | Required | Description                                    |
-| ------ | ------ | -------- | ---------------------------------------------- |
-| siteId | string | no       | Filter by site                                 |
-| search | string | no       | Regex search on URL or path (case-insensitive) |
+| Param  | Type   | Required | Description                                   |
+| ------ | ------ | -------- | --------------------------------------------- |
+| siteId | string | no       | Filter by site                                |
+| search | string | no       | Text search on URL or path (case-insensitive) |
 
 **Response:** `200`
 

@@ -1,134 +1,29 @@
-import { Hono } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
-import { cors } from 'hono/cors'
-import { logger } from 'hono/logger'
-import { secureHeaders } from 'hono/secure-headers'
-
 import { connectionHandler } from 'esix'
 
-import { ApiError } from './lib/api-error'
-import {
-  getJobRunnerStatus,
-  type JobRunnerStatusDto
-} from './lib/job-runner-heartbeat'
-import { rateLimiter } from './middleware/rate-limit'
-import { Logger } from './lib/logger'
-import { openapiSpec } from './openapi-spec'
-import apiKeys from './routes/api-keys'
-import auth from './routes/auth'
-import issues from './routes/issues'
-import pages from './routes/pages'
-import sites from './routes/sites'
-import teams from './routes/teams'
-import type { AppVariables, CloudflareBindings } from './types/env'
+import { makeApp } from './http/app'
+import { flushLogs } from './services/logging'
+import type { CloudflareBindings } from './types/env'
 
-const app = new Hono<{
-  Bindings: CloudflareBindings
-  Variables: AppVariables
-}>()
+// The app is built once per isolate. The bindings don't change between
+// requests, so the first request's `env` is used for the life of the isolate.
+let app: ReturnType<typeof makeApp> | undefined
 
-// Bridge Cloudflare env bindings into process.env for libraries that depend on it (e.g. esix).
-// Close stale DB connections so each request gets a fresh connection in the Workers runtime.
-app.use('*', async (context, next) => {
-  process.env.DB_URL = context.env.DB_URL
-  process.env.DB_DATABASE = context.env.DB_DATABASE
-  await connectionHandler.closeConnections()
-  await next()
-})
+export default {
+  async fetch(
+    request: Request,
+    env: CloudflareBindings,
+    context: ExecutionContext
+  ): Promise<Response> {
+    app ??= makeApp({ ...env })
 
-// Global middleware.
-app.use('*', logger())
-app.use('*', secureHeaders())
-app.use('*', cors())
-
-// Logger middleware.
-app.use('*', async (context, next) => {
-  const log = new Logger(context.env.AXIOM_TOKEN)
-  context.set('logger', log)
-  const start = Date.now()
-
-  await next()
-
-  const duration = Date.now() - start
-  const level =
-    context.res.status >= 500
-      ? 'error'
-      : context.res.status >= 400
-        ? 'warn'
-        : 'info'
-
-  log[level]('HTTP request', {
-    method: context.req.method,
-    path: context.req.path,
-    status: context.res.status,
-    duration
-  })
-
-  context.executionCtx.waitUntil(log.flush())
-})
-
-// Rate limiting.
-app.use('/auth/*', rateLimiter({ max: 10, windowMs: 60_000 }))
-app.use('/teams/*', rateLimiter({ max: 60, windowMs: 60_000 }))
-app.use('/sites/*', rateLimiter({ max: 60, windowMs: 60_000 }))
-app.use('/pages/*', rateLimiter({ max: 60, windowMs: 60_000 }))
-app.use('/issues/*', rateLimiter({ max: 60, windowMs: 60_000 }))
-app.use('/api-keys/*', rateLimiter({ max: 60, windowMs: 60_000 }))
-
-// Error handling.
-app.onError((error, context) => {
-  if (error instanceof ApiError) {
-    return context.json(
-      { error: { message: error.message } },
-      error.statusCode as ContentfulStatusCode
-    )
+    try {
+      return await app.handler(request)
+    } finally {
+      // Workers can't reuse a socket across requests, so each request closes
+      // the connection it opened before it ends.
+      context.waitUntil(
+        Promise.all([connectionHandler.closeConnections(), flushLogs()])
+      )
+    }
   }
-
-  const log = new Logger(context.env.AXIOM_TOKEN)
-  log.error(error.message, {
-    method: context.req.method,
-    path: context.req.path
-  })
-  context.executionCtx.waitUntil(log.flush())
-
-  return context.json(
-    {
-      error: {
-        message: 'An unexpected error occurred. Please try again later.'
-      }
-    },
-    500
-  )
-})
-
-// Health check. Also tells clients whether a job runner is processing sites,
-// so a `pending` site can be told apart from one nobody is working on.
-app.get('/', async (context) => {
-  let jobRunner: JobRunnerStatusDto | { lastSeenAt: null; status: 'unknown' }
-
-  try {
-    jobRunner = await getJobRunnerStatus(Date.now())
-  } catch (error) {
-    context.get('logger').error('Could not read the job runner status.', {
-      error: error instanceof Error ? error.message : String(error)
-    })
-
-    jobRunner = { lastSeenAt: null, status: 'unknown' }
-  }
-
-  return context.json({ jobRunner, service: 'foghorn-api', status: 'ok' })
-})
-
-// Routes.
-app.route('/auth', auth)
-app.route('/api-keys', apiKeys)
-app.route('/teams', teams)
-app.route('/issues', issues)
-app.route('/pages', pages)
-app.route('/sites', sites)
-
-app.get('/openapi', (context) => {
-  return context.json(openapiSpec)
-})
-
-export default app
+}

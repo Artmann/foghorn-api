@@ -15,22 +15,21 @@
 
 ## Next
 
-### Rewrite to Effect
+### Database connections on Workers
 
-- [ ] Plan the migration: services and layers for the database, logger, config,
-      PageSpeed client and auth.
-- [ ] Use tagged errors with clear, actionable messages instead of throwing
-      `ApiError`.
-- [ ] Move config to `Config` so missing env vars fail at startup with a clear
-      message.
-- [ ] Rewrite the jobs (scrape, audit) with Effect: timeouts, retries with
-      backoff for PageSpeed, bounded concurrency, and scheduling with
-      `Schedule`.
-- [ ] Rewrite the routes, either with `@effect/platform` HttpApi or by keeping
-      Hono and running Effect inside the handlers. Decide before starting.
-- [ ] Generate the OpenAPI spec from the schemas instead of keeping
-      `openapi-spec.ts` in sync by hand.
-- [ ] Keep the existing endpoint tests passing throughout.
+- [ ] Use a MongoDB client per request in the Worker. Esix shares one global
+      client, so concurrent requests in the same isolate use each other's
+      sockets. Under parallel load some requests fail with a 500 (in testing, 6
+      of 30). The Hono version had the same problem and also hung for 80
+      seconds. Options: create the client per request inside the `Database`
+      service (would mean replacing Esix in the Worker), or put an HTTP data
+      layer in front of MongoDB.
+
+### Effect follow-ups
+
+- [ ] Add the Effect language service (`@effect/language-service`) to catch
+      Effect mistakes in the editor.
+- [ ] Brand entity IDs (`TeamId`, `SiteId`, ...) in the schemas.
 
 ### MCP server
 
@@ -128,3 +127,7 @@
 - [x] Remove the unused `/internal` routes and the stale `package-lock.json`.
 - [x] Make the CI format check fail on unformatted files.
 - [x] Rewrite `AGENTS.md` and `CONTRIBUTING.md` to match the code.
+- [x] Rewrite the API and the job runner with Effect 4: `HttpApi` with schemas
+      and a generated OpenAPI spec, services and layers, tagged errors with a
+      `code` in every error response, `Config`, and an Effect job runner with
+      timeouts, retries with backoff, bounded concurrency and a clean shutdown.

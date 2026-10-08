@@ -1,18 +1,7 @@
 import { BaseModel } from 'esix'
-import { z } from 'zod'
 
+import type { TeamMemberDto } from '../api/schemas'
 import { timestampToDateTime } from '../lib/time'
-
-export const addTeamMemberSchema = z.object({
-  userId: z.string().min(1, 'userId is required.')
-})
-
-export interface TeamMemberDto {
-  createdAt: string
-  id: string
-  teamId: string
-  userId: string
-}
 
 export class TeamMember extends BaseModel {
   public teamId = ''

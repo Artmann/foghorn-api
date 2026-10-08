@@ -9,50 +9,71 @@ grouped by issue.
 
 It has two parts:
 
-- **API**: a Cloudflare Worker (Hono) that stores and serves data. It never
-  scrapes or audits anything itself.
+- **API**: a Cloudflare Worker that stores and serves data. It never scrapes or
+  audits anything itself.
 - **Job runner**: a long-running Bun process (`src/commands/run-jobs.ts`) that
   scrapes sitemaps and runs audits. For now it runs in Docker on a developer
   machine against the production database.
 
+Both are written with [Effect](https://effect.website) 4. The package ships its
+own docs in `node_modules/effect/ai-docs` and `node_modules/effect/CLAUDE.md`.
+Read those instead of relying on memory: Effect 4 differs a lot from Effect 3
+(`Context.Service` instead of `Effect.Service`, `effect/http-api` instead of
+`@effect/platform`, and so on).
+
 ## Architecture
 
 - **Runtime**: Cloudflare Workers with `nodejs_compat` (API), Bun (job runner)
-- **Framework**: Hono v4
-- **Database**: MongoDB through Esix and the native driver. Each request closes
-  stale connections first (see the first middleware in `src/index.ts`).
-- **Auth**: Bearer tokens. JWTs for users, `fh_` API keys for programmatic
-  access.
+- **HTTP**: Effect `HttpApi`. The API is defined as schemas in `src/api/`, and
+  the OpenAPI spec at `GET /openapi` is generated from them.
+- **Services**: `Context.Service` classes with a static `layer` in
+  `src/services/`. Handlers and jobs only talk to services.
+- **Database**: MongoDB through Esix and the native driver, wrapped by the
+  `Database` service. The Worker closes its connection at the end of each
+  request (`src/index.ts`), because Workers can't reuse sockets across requests.
+- **Auth**: Bearer tokens. JWTs (`src/lib/jwt.ts`) for users, `fh_` API keys for
+  programmatic access. See the `Authentication` middleware.
 - **Audits**: Google PageSpeed Insights API, mobile strategy, all four
   categories.
-- **Logging**: `src/lib/logger.ts`, which also sends to Axiom when `AXIOM_TOKEN`
-  is set.
+- **Logging**: `Effect.log*` with annotations. `src/services/logging.ts` writes
+  JSON lines and sends them to Axiom when `AXIOM_TOKEN` is set.
 
 ## File Structure
 
 ```
 src/
-  index.ts                 # App entry, middleware, health check, route mounting
-  openapi-spec.ts          # Hand-written OpenAPI spec served at GET /openapi
-  types/env.ts             # CloudflareBindings, AppVariables
-  commands/
-    run-jobs.ts            # Long-running job runner (Docker entrypoint)
-    scrape-sitemaps.ts     # scrapeSite() + one-off CLI
-    run-audits.ts          # auditPage(), auditPages() + one-off CLI
-  lib/
-    job-status.ts          # Pure status logic: pending/running/completed/failed
-    job-queue.ts           # Finds due work, counts progress, writes job state
-    job-runner-heartbeat.ts# Runner heartbeat and GET / runner status
-    run-pool.ts            # Bounded-concurrency worker pool
-    crypto.ts              # PBKDF2 password hashing
-    api-key.ts             # API key generation and hashing
-  middleware/
-    auth.ts                # JWT and API key bearer auth
-    rate-limit.ts          # Per-IP rate limiting (in memory, per isolate)
-  models/                  # Esix models and DTO helpers
-  routes/                  # auth, api-keys, teams, sites, pages, issues
-skills/lighthouse-audit/   # Agent skill for using the API
+  index.ts               # Worker entry: builds the app once per isolate
+  api/                   # The API contract. No server code in here.
+    api.ts               # Endpoint groups and the `Api` class
+    schemas.ts           # Request and response schemas, validation messages
+    errors.ts            # Tagged errors and how they're encoded on the wire
+    authentication.ts    # Authentication middleware definition, CurrentUser
+  http/
+    app.ts               # Layer wiring and `makeApp(env)`
+    handlers.ts          # Endpoint handlers, one group per resource
+    authentication.ts    # Authentication middleware implementation
+    middleware.ts        # Error responses, rate limiting, logging, headers
+  services/              # Effect services (Database, Users, Teams, Sites, ...)
+  jobs/                  # scrapeSite, auditPages and the runner loop
+  commands/run-jobs.ts   # CLI entry for the job runner (Docker entrypoint)
+  lib/                   # Pure helpers: job status, JWT, crypto, issues, ...
+  models/                # Esix models and DTO helpers
+skills/lighthouse-audit/ # Agent skill for using the API
 ```
+
+## Errors
+
+- Domain errors are `Schema.TaggedError` classes in `src/api/errors.ts`.
+  Services fail with them, and endpoints list them through their `...Response`
+  schema, which encodes them as `{ error: { code, message } }` with the right
+  status.
+- Every distinct failure gets its own error (`SiteNotFound`, not `NotFound`).
+  Messages tell the user what to do next.
+- `DatabaseError` is unexpected. Handlers turn it into a defect with
+  `Effect.catchTag('DatabaseError', Effect.die)`. The middleware in
+  `src/http/middleware.ts` logs defects and answers with a generic 500.
+- Request validation failures become `ValidationFailed` 400s with the messages
+  from the schemas in `src/api/schemas.ts`.
 
 ## Jobs and Pending State
 
@@ -64,8 +85,10 @@ skills/lighthouse-audit/   # Agent skill for using the API
   doesn't leave work stuck.
 - Work is due when it has never run, or when it last ran more than 4 hours ago
   (`jobCooldownMs`). Never-run work goes first.
-- The runner writes job state with `$set` through `src/lib/job-queue.ts`, not
+- The runner writes job state with `$set` through the `JobQueue` service, not
   `model.save()`, so it never overwrites changes made through the API.
+- Each audit and scrape runs uninterruptibly, so stopping the runner lets
+  in-flight work finish. The heartbeat is released by a scope finalizer.
 - Esix strips `$` operators from queries. Range and `$ne` queries go through
   `connectionHandler.getConnection()` and the collection directly. Esix stores
   `_id` as a hex string.
@@ -113,15 +136,19 @@ Job runner (`.env` locally, `.env.production` for Docker):
 
 ## Common Tasks
 
-### Adding a new protected route
+### Adding a new protected endpoint
 
-1. Create route file in `src/routes/`
-2. Apply `authMiddleware()` to the route
-3. Access user via `context.get('auth').userId`
-4. Mount in `src/index.ts`
-5. Update the OpenAPI spec in `src/openapi-spec.ts` to document the new endpoint
-6. Update the README to reflect the new endpoint
-7. Update the skill files in `skills/` to document the new endpoint
+1. Add the request and response schemas to `src/api/schemas.ts`, and any new
+   errors to `src/api/errors.ts`
+2. Add the endpoint to a group in `src/api/api.ts` (or a new group with
+   `.middleware(Authentication)`), listing its `error` responses
+3. Put the logic in a service in `src/services/` and add its layer to
+   `ServicesLive` in `src/http/app.ts`
+4. Implement the handler in `src/http/handlers.ts`. Read the user with
+   `yield* CurrentUser`
+5. Add endpoint tests in `src/http/` that call `app.request()`
+6. Update the README and the skill files in `skills/`. The OpenAPI spec updates
+   itself.
 
 ### Editing an existing endpoint
 
@@ -129,7 +156,8 @@ When changing request bodies, response shapes, status codes, or URL paths of an
 existing endpoint, you **must** update all of the following to keep them in
 sync:
 
-1. The OpenAPI spec in `src/openapi-spec.ts` (served at `GET /openapi`)
+1. The schemas and endpoint in `src/api/` (the OpenAPI spec is generated from
+   them)
 2. The README
 3. The skill files in `skills/` (both `SKILL.md` and
    `references/api-reference.md`)
@@ -138,9 +166,17 @@ sync:
 
 1. Create an Esix model in `src/models/` (extend `BaseModel`, give every field a
    default)
-2. Add a DTO interface and a `toXDto` helper that converts timestamps with
-   `timestampToDateTime`
-3. Add a `createTestX` helper in `src/test-helpers.ts` if tests need it
+2. Add the DTO schema to `src/api/schemas.ts` and a `toXDto` helper that
+   converts timestamps with `timestampToDateTime`
+3. Only access it through a service, using `Database.use()` so failures become
+   `DatabaseError`
+4. Add a `createTestX` helper in `src/test-helpers.ts` if tests need it
+
+### Testing services and jobs
+
+Use `runWithServices(effect)` from `src/test-helpers.ts`. It provides the job
+services against the mock database. Mock `globalThis.fetch` with `vi.spyOn` to
+fake PageSpeed and sitemap responses.
 
 ## Running Locally
 

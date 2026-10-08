@@ -223,12 +223,25 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
 
 ## Searching Pages
 
-Find specific pages by URL or path using regex search:
+Find specific pages by URL or path. The search is a case-insensitive text match:
 
 ```bash
 curl -s "https://foghorn-api.artgaard.workers.dev/pages?siteId=SITE_ID&search=blog" \
   -H "$AUTH"
 ```
+
+## Handling Errors
+
+Errors look like `{ "error": { "code": "SiteNotFound", "message": "..." } }`.
+Branch on `code` and show `message` to the user; it says what to do next.
+
+- `Unauthorized` — the token or API key is missing, invalid or expired. If you
+  used the key in `~/.foghorn`, it may have been deleted or expired. Run the
+  first-time setup again.
+- `ValidationFailed` — fix the field named in `message` and retry.
+- `RateLimited` — wait for the seconds in the `Retry-After` header.
+- `TeamLimitReached` / `SiteLimitReached` — tell the user the limit was reached.
+  Don't retry.
 
 ## Quick Reference
 

@@ -2,8 +2,8 @@
 
 ## Tech Stack
 
-- **API**: Cloudflare Workers with Hono
-- **Job runner**: Bun, packaged with Docker
+- **API**: Cloudflare Workers with Effect `HttpApi`
+- **Job runner**: Effect on Bun, packaged with Docker
 - **Database**: MongoDB with Esix
 - **Auth**: JWT tokens and API keys
 - **Audits**: PageSpeed Insights API

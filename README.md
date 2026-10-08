@@ -129,6 +129,35 @@ curl -H "Authorization: Bearer <jwt-token>" https://foghorn-api.artgaard.workers
 curl -H "Authorization: Bearer fh_abc123..." https://foghorn-api.artgaard.workers.dev/sites
 ```
 
+## Errors
+
+Every error response has the same shape:
+
+```json
+{
+  "error": {
+    "code": "SiteNotFound",
+    "message": "Site not found. List your sites with GET /sites to find the right ID."
+  }
+}
+```
+
+`code` is stable, so clients can branch on it. `message` explains what went
+wrong and what to do about it. Common codes:
+
+| Code               | Status | Meaning                                         |
+| ------------------ | ------ | ----------------------------------------------- |
+| `ValidationFailed` | 400    | The request body or query is invalid            |
+| `Unauthorized`     | 401    | Missing, invalid or expired token or API key    |
+| `NotTeamMember`    | 403    | You are not a member of the team                |
+| `SiteNotFound`     | 404    | Also `TeamNotFound`, `PageNotFound`, and so on  |
+| `RouteNotFound`    | 404    | There is no such endpoint                       |
+| `TeamLimitReached` | 409    | Also `SiteLimitReached`, `AlreadyTeamMember`    |
+| `RateLimited`      | 429    | Too many requests. See the `Retry-After` header |
+| `InternalError`    | 500    | Something went wrong on our side                |
+
+The OpenAPI spec at `GET /openapi` lists the errors each endpoint can return.
+
 ## Endpoints
 
 ### Auth
@@ -344,8 +373,8 @@ GET /pages?siteId=site-id-here&search=keyword
 
 Both query parameters are optional. If `siteId` is provided, returns pages for
 that site. Otherwise, returns pages across all sites you have access to.
-`search` filters pages where the URL or path matches the term
-(case-insensitive).
+`search` filters pages whose URL or path contains the text (case-insensitive).
+It's a plain text match, not a regular expression.
 
 #### Get a page
 
@@ -446,7 +475,8 @@ docker compose up --build
 It runs until stopped. On `docker compose down` or Ctrl+C it finishes the
 current audits before exiting. Without `PAGESPEED_API_KEY`, PageSpeed rate
 limits almost right away. When that happens the runner leaves the pages pending
-and pauses audits for 5 minutes.
+and pauses audits for 5 minutes. Network errors and 5xx responses from PageSpeed
+are retried twice with backoff before the audit counts as failed.
 
 ### Run it without Docker
 
@@ -459,5 +489,6 @@ bun run run-audits            # Only audit pages that are due
 
 `run-jobs` options: `--batch-size` (default 10), `--concurrency` (default 5, max
 5), `--delay` (seconds between audits per worker, default 3), `--idle-delay`
-(seconds to wait when there's nothing to do, default 60) and
-`--rate-limit-delay` (seconds to pause after being rate limited, default 300).
+(seconds to wait when there's nothing to do, default 60), `--rate-limit-delay`
+(seconds to pause after being rate limited, default 300), `--once` and
+`--only sitemaps|audits`. Run `bun run run-jobs --help` for details.

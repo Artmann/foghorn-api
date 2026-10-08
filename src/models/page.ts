@@ -1,6 +1,7 @@
 import { BaseModel } from 'esix'
 
-import { getJobStatus, getNextRunAt, type JobStatus } from '../lib/job-status'
+import type { PageDto } from '../api/schemas'
+import { getJobStatus, getNextRunAt } from '../lib/job-status'
 import { timestampToDateTime } from '../lib/time'
 
 export interface AuditResult {
@@ -18,7 +19,8 @@ export interface CategoryResult {
 
 export interface FieldMetricDistribution {
   min: number
-  max: number
+  // The last bucket has no upper bound.
+  max?: number
   proportion: number
 }
 
@@ -37,19 +39,6 @@ export interface PageAuditReport {
   bestPractices: CategoryResult
   seo: CategoryResult
   fieldData: Record<string, FieldMetric> | null
-}
-
-export interface PageDto {
-  auditError: string | null
-  auditReport: PageAuditReport | null
-  auditStatus: JobStatus
-  createdAt: string
-  id: string
-  lastAuditedAt: string | null
-  nextAuditAt: string | null
-  path: string
-  siteId: string
-  url: string
 }
 
 export class Page extends BaseModel {

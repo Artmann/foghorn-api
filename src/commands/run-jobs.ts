@@ -1,192 +1,128 @@
-import 'dotenv/config'
+import { BunRuntime, BunServices } from '@effect/platform-bun'
+import { Config, Duration, Effect, Layer, Option } from 'effect'
+import { Command, Flag } from 'effect/cli'
+import { FetchHttpClient } from 'effect/http'
 
-import { hostname } from 'node:os'
+import { runJobs } from '../jobs/runner'
+import { Database } from '../services/database'
+import { JobQueue } from '../services/job-queue'
+import { JobRunners } from '../services/job-runners'
+import { LoggingLive } from '../services/logging'
+import { PageSpeed } from '../services/page-speed'
+import { SitemapReader } from '../services/sitemap-reader'
 
-import { program } from 'commander'
-import { connectionHandler } from 'esix'
+const JobsLive = Layer.mergeAll(
+  JobQueue.layer,
+  JobRunners.layer,
+  PageSpeed.layer,
+  SitemapReader.layer
+).pipe(
+  Layer.provideMerge(Database.layer),
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provideMerge(LoggingLive)
+)
 
-import { findPagesDueForAudit, findSitesDueForScrape } from '../lib/job-queue'
-import { startHeartbeat } from '../lib/job-runner-heartbeat'
-import { Logger } from '../lib/logger'
-import { runPool } from '../lib/run-pool'
-import { sleep } from '../lib/sleep'
-import { auditPages } from './run-audits'
-import { scrapeSite } from './scrape-sitemaps'
+// Fails with a clear message instead of a config error deep in a layer.
+const checkEnvironment = Effect.gen(function* () {
+  const missing: string[] = []
 
-program
-  .description(
-    'Keep scraping sitemaps and auditing pages that are due. Runs until stopped.'
-  )
-  .option('--batch-size <number>', 'sites and pages to pick up per cycle', '10')
-  .option('--concurrency <number>', 'number of concurrent workers (max 5)', '5')
-  .option('--delay <number>', 'delay in seconds between audits per worker', '3')
-  .option(
-    '--idle-delay <number>',
-    'seconds to wait when there is nothing to do',
-    '60'
-  )
-  .option('--once', 'run a single cycle and exit')
-  .option(
-    '--rate-limit-delay <number>',
-    'seconds to wait when PageSpeed Insights rate limits us',
-    '300'
-  )
-  .parse()
+  for (const name of ['DB_URL', 'DB_DATABASE']) {
+    const value = yield* Config.option(Config.String(name))
 
-const options = program.opts()
-const batchSize = parseInt(options.batchSize, 10)
-const concurrency = Math.min(parseInt(options.concurrency, 10), 5)
-const delayMs = Math.max(parseFloat(options.delay), 0) * 1000
-const idleDelayMs = Math.max(parseFloat(options.idleDelay), 0) * 1000
-const rateLimitDelayMs = Math.max(parseFloat(options.rateLimitDelay), 0) * 1000
-const runOnce = options.once === true
-
-const logger = new Logger(process.env.AXIOM_TOKEN)
-const stopController = new AbortController()
-
-function describeDatabase(): string {
-  const database = process.env.DB_DATABASE ?? ''
-
-  try {
-    const host = new URL(process.env.DB_URL ?? '').host
-
-    return `${database} on ${host}`
-  } catch {
-    return database
+    if (Option.isNone(value) || value.value.length === 0) {
+      missing.push(name)
+    }
   }
-}
-
-function requireEnvironment(): void {
-  const missing = ['DB_URL', 'DB_DATABASE'].filter((name) => !process.env[name])
 
   if (missing.length > 0) {
-    throw new Error(
-      `Missing environment variables: ${missing.join(', ')}. Add them to .env.production (see .env.example).`
+    return yield* Effect.fail(
+      new Error(
+        `Missing environment variables: ${missing.join(', ')}. Add them to .env.production (see .env.example).`
+      )
     )
   }
 
-  if (!process.env.PAGESPEED_API_KEY) {
-    logger.warn(
+  const pageSpeedKey = yield* Config.option(Config.String('PAGESPEED_API_KEY'))
+
+  if (Option.isNone(pageSpeedKey) || pageSpeedKey.value.length === 0) {
+    yield* Effect.logWarning(
       'PAGESPEED_API_KEY is not set. PageSpeed Insights will rate limit audits quickly. Create a key in Google Cloud and add it to .env.production.'
     )
   }
-}
 
-interface CycleResult {
-  rateLimited: boolean
-  workCount: number
-}
+  const database = yield* Config.String('DB_DATABASE')
+  const url = yield* Config.String('DB_URL')
+  yield* Effect.logInfo(`Job runner using ${database} on ${getHost(url)}.`)
+})
 
-// Runs one cycle and returns how many sites and pages it picked up.
-async function runCycle(signal: AbortSignal): Promise<CycleResult> {
-  const sites = await findSitesDueForScrape(Date.now(), batchSize)
-
-  if (sites.length > 0) {
-    logger.info(`Scraping ${sites.length} sitemaps.`)
-
-    await runPool(sites, { concurrency, signal }, (site) =>
-      scrapeSite(site, logger)
-    )
-  }
-
-  if (signal.aborted) {
-    return { rateLimited: false, workCount: sites.length }
-  }
-
-  // Look for pages after scraping so new pages are audited in the same cycle.
-  const pages = await findPagesDueForAudit(Date.now(), batchSize)
-
-  if (pages.length === 0) {
-    return { rateLimited: false, workCount: sites.length }
-  }
-
-  logger.info(`Auditing ${pages.length} pages.`)
-
-  const { rateLimited } = await auditPages(pages, logger, {
-    concurrency,
-    delayMs,
-    signal
-  })
-
-  return { rateLimited, workCount: sites.length + pages.length }
-}
-
-async function main(): Promise<void> {
-  requireEnvironment()
-
-  logger.info(`Job runner started against ${describeDatabase()}.`, {
-    batchSize,
-    concurrency,
-    delayMs,
-    idleDelayMs,
-    rateLimitDelayMs
-  })
-
-  const signal = stopController.signal
-  const stopHeartbeat = await startHeartbeat(hostname(), logger)
-
+function getHost(url: string): string {
   try {
-    while (!signal.aborted) {
-      let result: CycleResult = { rateLimited: false, workCount: 0 }
-
-      try {
-        result = await runCycle(signal)
-      } catch (error) {
-        logger.error('Job cycle failed. Retrying after the idle delay.', {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-
-      await logger.flush()
-
-      if (runOnce) {
-        break
-      }
-
-      if (result.rateLimited) {
-        logger.warn(
-          `Pausing audits for ${rateLimitDelayMs / 1000} seconds because of rate limiting.`
-        )
-        await sleep(rateLimitDelayMs, signal)
-      } else if (result.workCount === 0) {
-        await sleep(idleDelayMs, signal)
-      }
-    }
-  } finally {
-    await stopHeartbeat()
+    return new URL(url).host
+  } catch {
+    return 'the configured host'
   }
-
-  logger.info('Job runner stopped.')
 }
 
-function stop(signalName: string): void {
-  if (stopController.signal.aborted) {
-    logger.warn(`Received ${signalName} again. Exiting without waiting.`)
-    process.exit(1)
-  }
+const command = Command.make(
+  'run-jobs',
+  {
+    batchSize: Flag.Int('batch-size').pipe(
+      Flag.withDescription('Sites and pages to pick up per cycle'),
+      Flag.withDefault(10)
+    ),
+    concurrency: Flag.Int('concurrency').pipe(
+      Flag.withDescription('Number of concurrent workers (max 5)'),
+      Flag.withDefault(5)
+    ),
+    delay: Flag.Finite('delay').pipe(
+      Flag.withDescription('Seconds between audits per worker'),
+      Flag.withDefault(3)
+    ),
+    idleDelay: Flag.Finite('idle-delay').pipe(
+      Flag.withDescription('Seconds to wait when there is nothing to do'),
+      Flag.withDefault(60)
+    ),
+    once: Flag.Boolean('once').pipe(
+      Flag.withDescription('Run a single cycle and exit'),
+      Flag.withDefault(false)
+    ),
+    only: Flag.Literals('only', ['all', 'sitemaps', 'audits']).pipe(
+      Flag.withDescription('Only scrape sitemaps or only run audits'),
+      Flag.withDefault('all')
+    ),
+    rateLimitDelay: Flag.Finite('rate-limit-delay').pipe(
+      Flag.withDescription(
+        'Seconds to pause audits after PageSpeed Insights rate limits us'
+      ),
+      Flag.withDefault(300)
+    )
+  },
+  (flags) =>
+    Effect.gen(function* () {
+      yield* checkEnvironment
 
-  logger.info(
-    `Received ${signalName}. Finishing the current work before stopping.`
+      yield* runJobs({
+        batchSize: Math.max(1, flags.batchSize),
+        concurrency: Math.min(Math.max(1, flags.concurrency), 5),
+        delay: Duration.seconds(Math.max(0, flags.delay)),
+        idleDelay: Duration.seconds(Math.max(0, flags.idleDelay)),
+        once: flags.once,
+        only: flags.only,
+        rateLimitDelay: Duration.seconds(Math.max(0, flags.rateLimitDelay))
+      }).pipe(
+        Effect.provide(JobsLive),
+        Effect.ensuring(Effect.logInfo('Job runner stopped.'))
+      )
+    })
+).pipe(
+  Command.withDescription(
+    'Scrape sitemaps and audit pages that are due. Runs until stopped.'
   )
-  stopController.abort()
-}
+)
 
-const onSigint = () => stop('SIGINT')
-const onSigterm = () => stop('SIGTERM')
-
-process.on('SIGINT', onSigint)
-process.on('SIGTERM', onSigterm)
-
-try {
-  await main()
-} catch (error) {
-  logger.error('Job runner crashed.', {
-    error: error instanceof Error ? error.message : String(error)
-  })
-  process.exitCode = 1
-} finally {
-  process.off('SIGINT', onSigint)
-  process.off('SIGTERM', onSigterm)
-  await logger.flush()
-  await connectionHandler.closeConnections()
-}
+// `runMain` interrupts the program on SIGINT and SIGTERM. Audits that have
+// started finish first, then the heartbeat is marked as stopped.
+Command.run(command, { version: '1.0.0' }).pipe(
+  Effect.provide(Layer.mergeAll(BunServices.layer, LoggingLive)),
+  BunRuntime.runMain
+)

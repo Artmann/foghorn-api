@@ -1,34 +1,7 @@
 import { BaseModel } from 'esix'
-import { z } from 'zod'
 
+import type { ApiKeyDto } from '../api/schemas'
 import { timestampToDateTime } from '../lib/time'
-
-export const createApiKeySchema = z.object({
-  expiresAt: z.string().datetime('Invalid date format.').optional(),
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Name is required.')
-    .max(100, 'Name must be 100 characters or less.')
-})
-
-export interface ApiKeyDto {
-  createdAt: string
-  expiresAt: string | null
-  id: string
-  keyPrefix: string
-  lastUsedAt: string | null
-  name: string
-}
-
-export interface CreateApiKeyDto {
-  createdAt: string
-  expiresAt: string | null
-  id: string
-  key: string
-  keyPrefix: string
-  name: string
-}
 
 export class ApiKey extends BaseModel {
   public expiresAt: number | null = null
@@ -42,12 +15,14 @@ export class ApiKey extends BaseModel {
 export function toApiKeyDto(apiKey: ApiKey): ApiKeyDto {
   return {
     createdAt: timestampToDateTime(apiKey.createdAt),
-    expiresAt: apiKey.expiresAt ? timestampToDateTime(apiKey.expiresAt) : null,
+    expiresAt:
+      apiKey.expiresAt === null ? null : timestampToDateTime(apiKey.expiresAt),
     id: apiKey.id,
     keyPrefix: apiKey.keyPrefix,
-    lastUsedAt: apiKey.lastUsedAt
-      ? timestampToDateTime(apiKey.lastUsedAt)
-      : null,
+    lastUsedAt:
+      apiKey.lastUsedAt === null
+        ? null
+        : timestampToDateTime(apiKey.lastUsedAt),
     name: apiKey.name
   }
 }

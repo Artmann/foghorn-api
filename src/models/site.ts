@@ -1,64 +1,9 @@
 import { BaseModel } from 'esix'
-import { z } from 'zod'
 
-import type { SiteAuditCounts } from '../lib/job-queue'
-import {
-  getJobStatus,
-  getNextRunAt,
-  getSiteStatus,
-  type AuditProgress,
-  type JobStatus,
-  type SiteStatus
-} from '../lib/job-status'
+import type { SiteDto } from '../api/schemas'
+import { getJobStatus, getNextRunAt, getSiteStatus } from '../lib/job-status'
 import { timestampToDateTime } from '../lib/time'
-
-export const createSiteSchema = z.object({
-  teamId: z.string().min(1, 'Team ID is required.'),
-  domain: z
-    .string()
-    .trim()
-    .min(1, 'Domain is required.')
-    .max(255, 'Domain must be 255 characters or less.'),
-  sitemapPath: z
-    .string()
-    .trim()
-    .min(1, 'Sitemap path must be at least 1 character.')
-    .max(255, 'Sitemap path must be 255 characters or less.')
-    .optional()
-})
-
-export const updateSiteSchema = z.object({
-  domain: z
-    .string()
-    .trim()
-    .min(1, 'Domain must be at least 1 character.')
-    .max(255, 'Domain must be 255 characters or less.')
-    .optional(),
-  sitemapPath: z
-    .string()
-    .trim()
-    .min(1, 'Sitemap path must be at least 1 character.')
-    .max(255, 'Sitemap path must be 255 characters or less.')
-    .optional()
-})
-
-export interface SitemapStatusDto {
-  error: string | null
-  lastScrapedAt: string | null
-  nextScrapeAt: string | null
-  status: JobStatus
-}
-
-export interface SiteDto {
-  audits: AuditProgress
-  createdAt: string
-  domain: string
-  id: string
-  sitemap: SitemapStatusDto
-  sitemapPath: string
-  status: SiteStatus
-  teamId: string
-}
+import type { SiteAuditCounts } from '../services/job-queue'
 
 export class Site extends BaseModel {
   public teamId = ''

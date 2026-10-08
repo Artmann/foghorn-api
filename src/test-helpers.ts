@@ -1,19 +1,24 @@
+import { ConfigProvider, Effect, Layer, References, type Scope } from 'effect'
 import { connectionHandler } from 'esix'
-import { sign } from 'hono/jwt'
+import { FetchHttpClient } from 'effect/http'
 
+import worker from './index'
 import { generateApiKey } from './lib/api-key'
-import { resetRateLimiter } from './middleware/rate-limit'
 import { hashPassword } from './lib/crypto'
-import app from './index'
+import { signJwt } from './lib/jwt'
+import { resetRateLimiter } from './lib/rate-limit'
 import { ApiKey } from './models/api-key'
 import { Page } from './models/page'
 import { Site } from './models/site'
 import { Team } from './models/team'
 import { TeamMember } from './models/team-member'
 import { User } from './models/user'
+import { Database } from './services/database'
+import { JobQueue } from './services/job-queue'
+import { JobRunners } from './services/job-runners'
+import { PageSpeed } from './services/page-speed'
+import { SitemapReader } from './services/sitemap-reader'
 import type { CloudflareBindings } from './types/env'
-
-export { app }
 
 export const testJwtSecret =
   'test-jwt-secret-that-is-long-enough-for-hs256-signing'
@@ -22,7 +27,25 @@ export const testEnvironment: CloudflareBindings = {
   AXIOM_TOKEN: 'test-axiom-token',
   DB_DATABASE: 'test-foghorn',
   DB_URL: 'mongodb://127.0.0.1:27017/',
-  JWT_SECRET: testJwtSecret
+  JWT_SECRET: testJwtSecret,
+  LOG_LEVEL: 'none'
+}
+
+// Sends a request through the Worker's fetch handler, like Hono's
+// `app.request()`.
+export const app = {
+  request(
+    path: string,
+    init: RequestInit = {},
+    environment: CloudflareBindings = testEnvironment,
+    context: ExecutionContext = mockExecutionContext
+  ): Promise<Response> {
+    return worker.fetch(
+      new Request(new URL(path, 'http://localhost'), init),
+      environment,
+      context
+    )
+  }
 }
 
 export const mockExecutionContext = {
@@ -32,6 +55,45 @@ export const mockExecutionContext = {
 } as unknown as ExecutionContext & {
   waitUntil: ReturnType<typeof vi.fn>
   passThroughOnException: ReturnType<typeof vi.fn>
+}
+
+export type TestServices =
+  | Database
+  | JobQueue
+  | JobRunners
+  | PageSpeed
+  | SitemapReader
+
+// Runs an effect with the job services against the mock database. HTTP calls
+// go through `fetch`, which tests can mock. PageSpeed doesn't retry, so failing
+// requests don't slow tests down.
+export function runWithServices<A, E>(
+  effect: Effect.Effect<A, E, Scope.Scope | TestServices>,
+  options: { fetch?: typeof globalThis.fetch } = {}
+): Promise<A> {
+  const ServicesLive = Layer.mergeAll(
+    JobQueue.layer,
+    JobRunners.layer,
+    PageSpeed.layerWith({ retries: 0 }),
+    SitemapReader.layer
+  ).pipe(
+    Layer.provideMerge(Database.layer),
+    Layer.provide(FetchHttpClient.layer),
+    Layer.provide(
+      Layer.succeed(
+        FetchHttpClient.Fetch,
+        options.fetch ?? ((input, init) => globalThis.fetch(input, init))
+      )
+    ),
+    Layer.provide(
+      ConfigProvider.layer(ConfigProvider.fromUnknown({ ...testEnvironment }))
+    ),
+    Layer.provideMerge(Layer.succeed(References.MinimumLogLevel, 'None'))
+  )
+
+  return Effect.runPromise(
+    effect.pipe(Effect.provide(ServicesLive), Effect.scoped)
+  )
 }
 
 afterEach(async () => {
@@ -68,7 +130,7 @@ export async function createAuthToken(
     exp: now + 86400
   }
 
-  return sign(payload, testJwtSecret, 'HS256')
+  return signJwt(payload, testJwtSecret)
 }
 
 export async function createExpiredToken(
@@ -84,7 +146,7 @@ export async function createExpiredToken(
     exp: past
   }
 
-  return sign(payload, testJwtSecret, 'HS256')
+  return signJwt(payload, testJwtSecret)
 }
 
 export async function createTestTeam(
