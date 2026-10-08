@@ -92,8 +92,7 @@ export class Sites extends Context.Service<Sites, SitesShape>()(
 
         if (!site) {
           return yield* new SiteNotFound({
-            message:
-              'Site not found. List your sites with GET /sites to find the right ID.'
+            message: 'Site not found. Check the ID against your list of sites.'
           })
         }
 

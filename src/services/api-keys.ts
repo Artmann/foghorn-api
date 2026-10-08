@@ -80,7 +80,7 @@ export class ApiKeys extends Context.Service<ApiKeys, ApiKeysShape>()(
 
           return yield* new ApiKeyNotFound({
             message:
-              'API key not found. List your keys with GET /api-keys to find the right ID.'
+              'API key not found. Check the ID against your list of API keys.'
           })
         }
 

@@ -7,7 +7,38 @@ agent to monitor site health and act on issues without leaving the loop.
 
 ## Getting Started
 
-### Use from an agent
+### Connect over MCP
+
+Foghorn is a remote MCP server at `https://foghorn-api.artgaard.workers.dev/mcp`
+(Streamable HTTP). Create an account and an API key first (see
+[Manual setup](#manual-setup) below), then add the server to your agent with the
+key as a bearer token. In Claude Code:
+
+```bash
+claude mcp add --transport http foghorn https://foghorn-api.artgaard.workers.dev/mcp \
+  --header "Authorization: Bearer fh_..."
+```
+
+Tools:
+
+| Tool                 | What it does                                           |
+| -------------------- | ------------------------------------------------------ |
+| `list_teams`         | List your teams                                        |
+| `create_team`        | Create a team                                          |
+| `list_sites`         | List sites with their processing status                |
+| `add_site`           | Add a site to crawl and audit                          |
+| `get_site`           | Get a site's status and audit progress                 |
+| `update_site`        | Change a site's domain or sitemap path                 |
+| `list_issues`        | Failing audits grouped by issue, most widespread first |
+| `list_pages`         | Pages with their Lighthouse category scores            |
+| `get_page`           | The full Lighthouse report for one page                |
+| `get_service_status` | Whether the job runner is processing sites             |
+
+The server supports MCP protocol versions `2025-03-26` through `2026-07-28`. The
+older versions keep sessions in memory on the Worker, so a client may be asked
+to start a new session now and then. Clients handle that on their own.
+
+### Use the agent skill
 
 Install the Foghorn skill to use the API directly from Claude Code, Cursor,
 Gemini CLI, or any agent that supports the
@@ -137,7 +168,7 @@ Every error response has the same shape:
 {
   "error": {
     "code": "SiteNotFound",
-    "message": "Site not found. List your sites with GET /sites to find the right ID."
+    "message": "Site not found. Check the ID against your list of sites."
   }
 }
 ```

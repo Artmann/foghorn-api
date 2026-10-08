@@ -91,7 +91,7 @@ export class Teams extends Context.Service<Teams, TeamsShape>()(
           if (!team) {
             return yield* new TeamNotFound({
               message:
-                'Team not found. List your teams with GET /teams to find the right ID.'
+                'Team not found. Check the ID against your list of teams.'
             })
           }
 
@@ -253,7 +253,7 @@ export class Teams extends Context.Service<Teams, TeamsShape>()(
         if (!member) {
           return yield* new TeamMemberNotFound({
             message:
-              'Member not found. List the members with GET /teams/:id/members.'
+              "Member not found. Check the user ID against the team's members."
           })
         }
 

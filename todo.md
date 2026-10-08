@@ -33,16 +33,14 @@
 
 ### MCP server
 
-- [ ] Add an MCP server so agents can use Foghorn as tools instead of reading
-      the skill and calling the REST API.
-- [ ] Tools: list sites, add site, list issues, get page report, run an audit
-      now, get score history.
-- [ ] Auth with an API key (`fh_...`).
-- [ ] Decide where it runs: a remote MCP endpoint on the Worker (HTTP), a local
-      stdio package (`npx foghorn-mcp`), or both.
-- [ ] Build it on top of the Effect services so the REST API and MCP share the
-      same logic.
-- [ ] Update the skill and README to point at the MCP server.
+- [ ] Add `run_audit_now` once there is an on-demand audit endpoint, and
+      `get_score_history` once score tracking exists.
+- [ ] Sessions for the older MCP protocols live in memory per Worker isolate and
+      never expire unless the client ends them. Isolates are recycled often, but
+      move sessions to a Durable Object (or drop the old protocols once clients
+      support 2026-07-28) before this gets real traffic.
+- [ ] OAuth for MCP, so users can connect without creating an API key first.
+- [ ] Submit the server to the MCP registry.
 
 ### Hardening
 
@@ -131,3 +129,6 @@
       and a generated OpenAPI spec, services and layers, tagged errors with a
       `code` in every error response, `Config`, and an Effect job runner with
       timeouts, retries with backoff, bounded concurrency and a clean shutdown.
+- [x] Remote MCP server at `/mcp` on the Worker, with API key or JWT auth and
+      tools for teams, sites, issues and pages, built on the same services as
+      the REST API.

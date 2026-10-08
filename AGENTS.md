@@ -53,6 +53,7 @@ src/
     handlers.ts          # Endpoint handlers, one group per resource
     authentication.ts    # Authentication middleware implementation
     middleware.ts        # Error responses, rate limiting, logging, headers
+  mcp/                   # Remote MCP server at /mcp: tools, handlers, auth
   services/              # Effect services (Database, Users, Teams, Sites, ...)
   jobs/                  # scrapeSite, auditPages and the runner loop
   commands/run-jobs.ts   # CLI entry for the job runner (Docker entrypoint)
@@ -60,6 +61,19 @@ src/
   models/                # Esix models and DTO helpers
 skills/lighthouse-audit/ # Agent skill for using the API
 ```
+
+## MCP Server
+
+- `src/mcp/server.ts` mounts Effect's `McpServer.layerHttp` at `/mcp` on the
+  same router as the REST API. Tools are defined in `src/mcp/tools.ts` and
+  implemented in `src/mcp/handlers.ts` on top of the same services.
+- A route middleware checks the bearer token on every request and provides
+  `CurrentUser`. Tool handlers are built once, so they read it with
+  `Effect.serviceOption(CurrentUser)`.
+- Tools fail with `ToolFailed`, whose message the agent sees. Keep error
+  messages free of REST-specific wording, since both APIs show them.
+- When you add a REST endpoint that agents need, add a tool for it too, and
+  update the tool list in the README.
 
 ## Errors
 

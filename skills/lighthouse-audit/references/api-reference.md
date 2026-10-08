@@ -8,7 +8,7 @@ All endpoints return JSON. Errors use a consistent shape:
 {
   "error": {
     "code": "SiteNotFound",
-    "message": "Site not found. List your sites with GET /sites to find the right ID."
+    "message": "Site not found. Check the ID against your list of sites."
   }
 }
 ```

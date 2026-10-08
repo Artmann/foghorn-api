@@ -13,6 +13,7 @@ const rateLimits: { limit: RateLimit; prefix: string }[] = [
   { limit: { max: 10, windowMs: 60_000 }, prefix: '/auth' },
   { limit: { max: 60, windowMs: 60_000 }, prefix: '/api-keys' },
   { limit: { max: 60, windowMs: 60_000 }, prefix: '/issues' },
+  { limit: { max: 120, windowMs: 60_000 }, prefix: '/mcp' },
   { limit: { max: 60, windowMs: 60_000 }, prefix: '/pages' },
   { limit: { max: 60, windowMs: 60_000 }, prefix: '/sites' },
   { limit: { max: 60, windowMs: 60_000 }, prefix: '/teams' }

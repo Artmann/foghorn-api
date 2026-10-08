@@ -3,6 +3,7 @@ import { HttpRouter, HttpServer } from 'effect/http'
 import { HttpApiBuilder } from 'effect/http-api'
 
 import { Api } from '../api/api'
+import { McpLive } from '../mcp/server'
 import { ApiKeys } from '../services/api-keys'
 import { Database } from '../services/database'
 import { Issues } from '../services/issues'
@@ -36,10 +37,12 @@ const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: '/openapi' }).pipe(
   Layer.provide(AuthenticationLive)
 )
 
-const AppLive = Layer.mergeAll(ApiLive, AppMiddleware, HttpRouter.cors()).pipe(
-  Layer.provide(ServicesLive),
-  Layer.provide(HttpServer.layerServices)
-)
+const AppLive = Layer.mergeAll(
+  ApiLive,
+  AppMiddleware,
+  HttpRouter.cors(),
+  McpLive
+).pipe(Layer.provide(ServicesLive), Layer.provide(HttpServer.layerServices))
 
 // Builds a fetch handler. `env` is where config is read from: the Worker
 // bindings in production, or a plain object in tests.

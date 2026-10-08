@@ -25,6 +25,9 @@ through a REST API. This skill lets you interact with that API using `curl`.
 
 **Base URL:** `https://foghorn-api.artgaard.workers.dev`
 
+If the `foghorn` MCP server is connected (tools like `list_sites` and
+`add_site`), use its tools instead of `curl`. The flow is the same.
+
 ## Authentication
 
 All endpoints (except sign-up, sign-in, and health check) require a Bearer token

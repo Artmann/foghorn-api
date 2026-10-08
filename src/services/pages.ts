@@ -90,7 +90,7 @@ export class Pages extends Context.Service<Pages, PagesShape>()(
         if (!page) {
           return yield* new PageNotFound({
             message:
-              'Page not found. List the pages with GET /pages?siteId=... to find the right ID.'
+              'Page not found. Check the ID against the list of pages for the site.'
           })
         }
 
