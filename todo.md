@@ -8,18 +8,10 @@
       `PAGESPEED_API_KEY` and `AXIOM_TOKEN`, then run `docker compose up`.
 - [ ] Run it against production and watch the first full pass. Check how long
       250 pages take and whether 5 workers hit PageSpeed's quota.
-- [ ] Remove the stale `package-lock.json`. The project uses `bun.lock`.
-
-### Fix what's out of date
-
-- [ ] Rewrite `AGENTS.md`. It describes the MongoDB Data API and `MONGODB_*`
-      variables, but the code uses Esix with `DB_URL` / `DB_DATABASE`. The file
-      list and route names (`/auth/signup`) are also wrong.
-- [ ] Fix the CI format job. `prettier --write . --check` never fails. Use
-      `prettier --check .`, then format the 5 files that fail today.
-- [ ] Decide what to do with `src/routes/internal.ts`. Nothing calls it. Either
-      remove it or make the job runner use it instead of talking to the database
-      directly.
+- [ ] Delete the unused `INTERNAL_API_KEY` secret:
+      `bunx wrangler secret delete INTERNAL_API_KEY`.
+- [ ] Stop tracking `.claude/settings.local.json`. It's a personal file and
+      contains an old local JWT.
 
 ## Next
 
@@ -55,6 +47,9 @@
 
 ### Hardening
 
+- [ ] Raise the PBKDF2 iterations for passwords from 10,000 to 100,000 (the most
+      Workers allows). Store the iteration count per user so existing hashes
+      keep working, and rehash on the next sign-in.
 - [ ] Add pagination to `GET /pages` and `GET /issues`. Today they load every
       page and full audit report into memory.
 - [ ] Use a projection so list endpoints don't return full audit reports.
@@ -130,3 +125,6 @@
       a crashed runner doesn't leave work stuck.
 - [x] Job runner heartbeat, shown as `jobRunner` on `GET /`.
 - [x] Remove pages that are no longer in the sitemap or belong to an old domain.
+- [x] Remove the unused `/internal` routes and the stale `package-lock.json`.
+- [x] Make the CI format check fail on unformatted files.
+- [x] Rewrite `AGENTS.md` and `CONTRIBUTING.md` to match the code.

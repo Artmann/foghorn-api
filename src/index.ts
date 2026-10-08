@@ -16,7 +16,6 @@ import { Logger } from './lib/logger'
 import { openapiSpec } from './openapi-spec'
 import apiKeys from './routes/api-keys'
 import auth from './routes/auth'
-import internal from './routes/internal'
 import issues from './routes/issues'
 import pages from './routes/pages'
 import sites from './routes/sites'
@@ -123,7 +122,6 @@ app.get('/', async (context) => {
 // Routes.
 app.route('/auth', auth)
 app.route('/api-keys', apiKeys)
-app.route('/internal', internal)
 app.route('/teams', teams)
 app.route('/issues', issues)
 app.route('/pages', pages)

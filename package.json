@@ -6,6 +6,7 @@
     "deploy": "wrangler deploy --minify",
     "dev": "wrangler dev",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "run-audits": "bun src/commands/run-audits.ts",
     "run-jobs": "bun src/commands/run-jobs.ts",
     "scrape-sitemaps": "bun src/commands/scrape-sitemaps.ts",

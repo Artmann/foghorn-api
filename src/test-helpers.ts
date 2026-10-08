@@ -22,7 +22,6 @@ export const testEnvironment: CloudflareBindings = {
   AXIOM_TOKEN: 'test-axiom-token',
   DB_DATABASE: 'test-foghorn',
   DB_URL: 'mongodb://127.0.0.1:27017/',
-  INTERNAL_API_KEY: 'test-internal-api-key',
   JWT_SECRET: testJwtSecret
 }
 
