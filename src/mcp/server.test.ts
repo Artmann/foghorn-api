@@ -1,7 +1,6 @@
 import { connectionHandler } from 'esix'
 import { describe, expect, it } from 'vitest'
 
-import { Page } from '../models/page'
 import { Site } from '../models/site'
 import {
   app,
@@ -266,32 +265,51 @@ describe('MCP endpoint', () => {
     await audited.save()
 
     const { callTool } = await connect(token)
-    const result = await callTool('list_pages', { siteId: site.id })
-    const pages = result.structuredContent?.pages as Page[]
+    const result = await callTool('list_pages', { limit: 1, siteId: site.id })
 
-    expect([...pages].sort((a, b) => a.path.localeCompare(b.path))).toEqual([
-      {
-        auditStatus: 'completed',
-        id: audited.id,
-        lastAuditedAt: '2026-10-08T12:00:00.000Z',
-        path: '/audited',
-        scores: {
-          accessibility: 0.9,
-          bestPractices: 1,
-          performance: 0.5,
-          seo: 0.8
-        },
-        url: 'https://example.com/audited'
-      },
-      {
-        auditStatus: 'pending',
-        id: expect.any(String),
-        lastAuditedAt: null,
-        path: '/waiting',
-        scores: null,
-        url: 'https://example.com/waiting'
-      }
-    ])
+    expect(result.structuredContent).toEqual({
+      pages: [
+        {
+          auditError: null,
+          auditStatus: 'completed',
+          createdAt: expect.any(String),
+          id: audited.id,
+          lastAuditedAt: '2026-10-08T12:00:00.000Z',
+          nextAuditAt: '2026-10-08T16:00:00.000Z',
+          path: '/audited',
+          scores: {
+            accessibility: 0.9,
+            bestPractices: 1,
+            performance: 0.5,
+            seo: 0.8
+          },
+          siteId: site.id,
+          url: 'https://example.com/audited'
+        }
+      ],
+      pagination: { limit: 1, nextOffset: 1, offset: 0, total: 2 }
+    })
+  })
+
+  it('rejects paging arguments out of range', async () => {
+    const { token, user } = await setupUser()
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+    const { request } = await connect(token)
+
+    const response = await request('tools/call', {
+      arguments: { limit: 500, siteId: site.id },
+      name: 'list_pages'
+    })
+
+    expect(response.error).toEqual(
+      expect.objectContaining({
+        code: -32602,
+        message: expect.stringContaining(
+          'Limit must be a whole number from 1 to 250.'
+        )
+      })
+    )
   })
 
   it("runs tools on the request's own database connection", async () => {

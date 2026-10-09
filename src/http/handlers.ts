@@ -282,13 +282,13 @@ export const PagesHandlers = HttpApiBuilder.group(Api, 'pages', (handlers) =>
       .handle('list', ({ query }) =>
         Effect.gen(function* () {
           const { userId } = yield* CurrentUser
-          const pageList = yield* pages.list({
+          return yield* pages.list({
+            limit: query.limit,
+            offset: query.offset,
             search: query.search,
             siteId: query.siteId,
             userId
           })
-
-          return { pages: pageList }
         }).pipe(Effect.catchTag('DatabaseError', Effect.die))
       )
       .handle('get', ({ params }) =>
@@ -312,6 +312,9 @@ export const IssuesHandlers = HttpApiBuilder.group(Api, 'issues', (handlers) =>
 
         return yield* issues.list({
           category: query.category,
+          limit: query.limit,
+          offset: query.offset,
+          pagesPerIssue: query.pagesPerIssue,
           siteId: query.siteId,
           userId
         })

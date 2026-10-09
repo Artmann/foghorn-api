@@ -30,7 +30,7 @@ Tools:
 | `get_site`           | Get a site's status and audit progress                 |
 | `update_site`        | Change a site's domain or sitemap path                 |
 | `list_issues`        | Failing audits grouped by issue, most widespread first |
-| `list_pages`         | Pages with their Lighthouse category scores            |
+| `list_pages`         | Pages with their Lighthouse category scores, paged     |
 | `get_page`           | The full Lighthouse report for one page                |
 | `get_service_status` | Whether the job runner is processing sites             |
 
@@ -142,8 +142,9 @@ curl https://foghorn-api.artgaard.workers.dev/issues?siteId=<site-id> \
 ```
 
 Returns audit failures grouped by audit ID, sorted by the number of affected
-pages. Each issue includes the list of pages where the audit fails. The response
-also has a `status`: while it's `pending`, the list is incomplete.
+pages. Each issue has `pageCount` and the worst affected pages. The response
+also has a `status`: while it's `pending`, the list is incomplete. Results are
+paged; see [Pagination](#pagination).
 
 ## Authentication
 
@@ -399,13 +400,43 @@ site's team.
 #### List pages
 
 ```
-GET /pages?siteId=site-id-here&search=keyword
+GET /pages?siteId=site-id-here&search=keyword&limit=50&offset=0
 ```
 
-Both query parameters are optional. If `siteId` is provided, returns pages for
+All query parameters are optional. If `siteId` is provided, returns pages for
 that site. Otherwise, returns pages across all sites you have access to.
 `search` filters pages whose URL or path contains the text (case-insensitive).
 It's a plain text match, not a regular expression.
+
+Pages are sorted by URL and paged (`limit` defaults to 50, at most 250). Lists
+leave out the audit report. Each page has `scores` instead, with the four
+Lighthouse category scores from 0 to 1, or `null` before the first successful
+audit. Use `GET /pages/:id` for the full report.
+
+```json
+{
+  "pages": [
+    {
+      "id": "page-id",
+      "siteId": "site-id",
+      "url": "https://www.example.com/about",
+      "path": "/about",
+      "auditStatus": "completed",
+      "auditError": null,
+      "lastAuditedAt": "2026-10-08T12:00:00.000Z",
+      "nextAuditAt": "2026-10-08T16:00:00.000Z",
+      "createdAt": "2026-10-01T09:00:00.000Z",
+      "scores": {
+        "performance": 0.62,
+        "accessibility": 0.91,
+        "bestPractices": 1,
+        "seo": 0.85
+      }
+    }
+  ],
+  "pagination": { "limit": 50, "offset": 0, "nextOffset": null, "total": 1 }
+}
+```
 
 #### Get a page
 
@@ -424,17 +455,20 @@ All issue endpoints require authentication.
 #### List issues
 
 ```
-GET /issues?siteId=site-id-here&category=accessibility
+GET /issues?siteId=site-id-here&category=accessibility&limit=20&offset=0&pagesPerIssue=10
 ```
 
-Both query parameters are optional. If `siteId` is provided, returns issues for
+All query parameters are optional. If `siteId` is provided, returns issues for
 that site. Otherwise, returns issues across all sites you have access to.
 `category` filters to a single Lighthouse category: `performance`,
 `accessibility`, `bestPractices`, or `seo`.
 
-Returns audit failures grouped by audit ID across all pages. Each issue includes
-the list of pages where the audit fails, sorted by score ascending (worst
-first). Issues are sorted by number of affected pages descending.
+Returns audit failures grouped by audit ID across all pages. Issues are sorted
+by number of affected pages, most first, and paged (`limit` defaults to 20, at
+most 100). Each issue has `pageCount`, the number of pages where the audit
+fails, and `pages`, the worst of them sorted by score (up to `pagesPerIssue`,
+default 10, at most 250). A site has at most 250 pages, so `pagesPerIssue=250`
+together with `siteId` lists every affected page.
 
 The response also includes `status` and `audits`. `status` is `pending` while a
 sitemap hasn't been scraped yet or pages are waiting for their first audit, so
@@ -450,9 +484,40 @@ the issue list is incomplete. It's `ready` once everything has been audited.
     "runningPages": 5,
     "totalPages": 50
   },
-  "issues": []
+  "issues": [
+    {
+      "auditId": "color-contrast",
+      "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+      "category": "accessibility",
+      "pageCount": 14,
+      "pages": [
+        {
+          "pageId": "page-id",
+          "url": "https://www.example.com/about",
+          "path": "/about",
+          "score": 0,
+          "displayValue": null
+        }
+      ]
+    }
+  ],
+  "pagination": { "limit": 20, "offset": 0, "nextOffset": null, "total": 1 }
 }
 ```
+
+### Pagination
+
+`GET /pages` and `GET /issues` return a page of results and a `pagination`
+object:
+
+- `limit` and `offset`: what this response covers.
+- `total`: how many items there are in all.
+- `nextOffset`: pass it as `offset` to get the next page, or `null` on the last
+  page.
+
+`limit` and `offset` must be whole numbers. Anything else returns a 400
+`ValidationFailed` error, for example "Limit must be a whole number from 1 to
+100."
 
 ### Other
 

@@ -30,8 +30,13 @@ import {
   CreateSitePayload,
   HealthResponse,
   IssueCategory,
+  issueListLimit,
   IssuesResponse,
   PageDto,
+  pageListLimit,
+  PagesResponse,
+  pagesPerIssueField,
+  paginationFields,
   SignInPayload,
   SignInResponse,
   SignUpPayload,
@@ -207,14 +212,15 @@ export class PagesGroup extends HttpApiGroup.make('pages')
     HttpApiEndpoint.get('list', '/', {
       error: [...teamErrors, SiteNotFoundResponse],
       query: {
+        ...paginationFields(pageListLimit, { fromString: true }),
         search: Schema.optional(Schema.String),
         siteId: Schema.optional(Schema.String)
       },
-      success: Schema.Struct({ pages: Schema.Array(PageDto) })
+      success: PagesResponse
     }).annotateMerge(
       describe(
         'List pages',
-        '`search` matches the URL or path, case-insensitive.'
+        'Pages sorted by URL, with their category scores but without audit reports. Use `GET /pages/:id` for the full report. `search` matches the URL or path, case-insensitive.'
       )
     ),
     HttpApiEndpoint.get('get', '/:id', {
@@ -231,14 +237,16 @@ export class IssuesGroup extends HttpApiGroup.make('issues')
     HttpApiEndpoint.get('list', '/', {
       error: [...teamErrors, SiteNotFoundResponse],
       query: {
+        ...paginationFields(issueListLimit, { fromString: true }),
         category: Schema.optional(IssueCategory),
+        pagesPerIssue: pagesPerIssueField({ fromString: true }),
         siteId: Schema.optional(Schema.String)
       },
       success: IssuesResponse
     }).annotateMerge(
       describe(
         'List issues',
-        'Failing audits grouped by audit ID, most widespread first. Pages in each issue are sorted by score, worst first.'
+        'Failing audits grouped by audit ID, most widespread first. Each issue lists its worst pages, up to `pagesPerIssue`, and `pageCount` has the full count.'
       )
     )
   )

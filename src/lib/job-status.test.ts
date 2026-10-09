@@ -7,8 +7,7 @@ import {
   isDue,
   isRunning,
   jobCooldownMs,
-  jobLeaseMs,
-  summarizeAudits
+  jobLeaseMs
 } from './job-status'
 
 const now = Date.UTC(2026, 9, 8, 12, 0, 0)
@@ -132,31 +131,5 @@ describe('isRunning', () => {
 
   it('is not running after the lease', () => {
     expect(isRunning(now - jobLeaseMs - 1000, now)).toEqual(false)
-  })
-})
-
-describe('summarizeAudits', () => {
-  it('counts pages by audit status', () => {
-    expect(
-      summarizeAudits(
-        [
-          { auditError: null, auditStartedAt: null, lastAuditedAt: null },
-          { auditError: null, auditStartedAt: now, lastAuditedAt: null },
-          { auditError: null, auditStartedAt: null, lastAuditedAt: now },
-          {
-            auditError: 'Timeout auditing /',
-            auditStartedAt: null,
-            lastAuditedAt: now
-          }
-        ],
-        now
-      )
-    ).toEqual({
-      completedPages: 1,
-      failedPages: 1,
-      pendingPages: 1,
-      runningPages: 1,
-      totalPages: 4
-    })
   })
 })

@@ -5,9 +5,13 @@ import {
   CreateSitePayload,
   HealthResponse,
   IssueCategory,
+  issueListLimit,
   IssuesResponse,
-  JobStatus,
   PageDto,
+  pageListLimit,
+  PagesResponse,
+  pagesPerIssueField,
+  paginationFields,
   SiteDto,
   TeamDto,
   TeamPayload,
@@ -23,27 +27,6 @@ export class ToolFailed extends Schema.TaggedError<ToolFailed>()('ToolFailed', {
 const siteId = Schema.String.annotate({
   description: 'The site ID, from list_sites or add_site.'
 })
-
-export const PageSummary = Schema.Struct({
-  auditStatus: JobStatus,
-  id: Schema.String,
-  lastAuditedAt: Schema.NullOr(Schema.String),
-  path: Schema.String,
-  scores: Schema.NullOr(
-    Schema.Struct({
-      accessibility: Schema.NullOr(Schema.Number),
-      bestPractices: Schema.NullOr(Schema.Number),
-      performance: Schema.NullOr(Schema.Number),
-      seo: Schema.NullOr(Schema.Number)
-    })
-  ).annotate({
-    description:
-      'Lighthouse category scores from 0 to 1, or null before the first audit.'
-  }),
-  url: Schema.String
-})
-
-export type PageSummary = typeof PageSummary.Type
 
 const pendingNote =
   'Processing happens in the background and can take minutes to hours. While `status` is `pending`, tell the user how far along it is (from `audits`) instead of waiting in a loop.'
@@ -119,15 +102,17 @@ export const UpdateSite = Tool.make('update_site', {
 
 export const ListIssues = Tool.make('list_issues', {
   description:
-    'List failing Lighthouse audits grouped by issue, most widespread first. Each issue lists the affected pages, worst score first. If `status` is `pending`, the list is incomplete because pages are still being audited.',
+    'List failing Lighthouse audits grouped by issue, most widespread first. Each issue has `pageCount` and its worst pages, up to `pagesPerIssue`. Results are paged: when `pagination.nextOffset` is not null, call again with that `offset` for more. If `status` is `pending`, the list is incomplete because pages are still being audited.',
   failure: ToolFailed,
   parameters: Schema.Struct({
+    ...paginationFields(issueListLimit, { fromString: false }),
     category: Schema.optional(
       IssueCategory.annotate({
         description:
           'Only list issues in this Lighthouse category: performance, accessibility, bestPractices or seo.'
       })
     ),
+    pagesPerIssue: pagesPerIssueField({ fromString: false }),
     siteId: Schema.optional(
       siteId.annotate({
         description:
@@ -142,9 +127,10 @@ export const ListIssues = Tool.make('list_issues', {
 
 export const ListPages = Tool.make('list_pages', {
   description:
-    "List the pages Foghorn found in a site's sitemap with their Lighthouse category scores. Use get_page for the full audit report of one page.",
+    "List the pages Foghorn found in a site's sitemap with their Lighthouse category scores, sorted by URL. Use get_page for the full audit report of one page. Results are paged: when `pagination.nextOffset` is not null, call again with that `offset` for more.",
   failure: ToolFailed,
   parameters: Schema.Struct({
+    ...paginationFields(pageListLimit, { fromString: false }),
     search: Schema.optional(
       Schema.String.annotate({
         description:
@@ -153,7 +139,7 @@ export const ListPages = Tool.make('list_pages', {
     ),
     siteId
   }),
-  success: Schema.Struct({ pages: Schema.Array(PageSummary) })
+  success: PagesResponse
 })
   .annotate(Tool.Title, 'List pages')
   .annotate(Tool.Readonly, true)

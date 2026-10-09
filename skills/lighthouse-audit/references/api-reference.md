@@ -519,14 +519,17 @@ All endpoints require `Authorization: Bearer <token>`.
 
 ### GET `/pages`
 
-List pages. Optionally filter by site and search by URL/path.
+List pages sorted by URL, with their category scores but without audit reports.
+Optionally filter by site and search by URL/path.
 
 **Query parameters:**
 
-| Param  | Type   | Required | Description                                   |
-| ------ | ------ | -------- | --------------------------------------------- |
-| siteId | string | no       | Filter by site                                |
-| search | string | no       | Text search on URL or path (case-insensitive) |
+| Param  | Type    | Required | Description                                           |
+| ------ | ------- | -------- | ----------------------------------------------------- |
+| siteId | string  | no       | Filter by site                                        |
+| search | string  | no       | Text search on URL or path (case-insensitive)         |
+| limit  | integer | no       | Pages to return, 1 to 250. Default 50                 |
+| offset | integer | no       | Pages to skip. Use `pagination.nextOffset`. Default 0 |
 
 **Response:** `200`
 
@@ -542,19 +545,34 @@ List pages. Optionally filter by site and search by URL/path.
       "auditError": "string | null",
       "lastAuditedAt": "ISO 8601 | null",
       "nextAuditAt": "ISO 8601 | null",
-      "auditReport": "PageAuditReport | null",
+      "scores": {
+        "performance": "number | null",
+        "accessibility": "number | null",
+        "bestPractices": "number | null",
+        "seo": "number | null"
+      },
       "createdAt": "ISO 8601"
     }
-  ]
+  ],
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "nextOffset": "number | null",
+    "total": 0
+  }
 }
 ```
 
 - `auditStatus` is `pending` until the first audit runs, `running` while an
   audit is in progress, and `failed` when the last audit failed (see
   `auditError`).
-- A failed audit keeps the last successful `auditReport`.
+- `scores` come from the last successful audit, so a failed audit keeps them.
+  It's `null` before the first successful audit.
 - `nextAuditAt` is null until the first audit. Pages are re-audited every 4
   hours.
+- `pagination.nextOffset` is `null` on the last page.
+
+**Errors:** `400` invalid `limit` or `offset`, `404`, `403`.
 
 ---
 
@@ -624,10 +642,13 @@ widespread first).
 
 **Query parameters:**
 
-| Param    | Type   | Required | Description                                                    |
-| -------- | ------ | -------- | -------------------------------------------------------------- |
-| siteId   | string | no       | Filter by site                                                 |
-| category | string | no       | One of: `performance`, `accessibility`, `bestPractices`, `seo` |
+| Param         | Type    | Required | Description                                                    |
+| ------------- | ------- | -------- | -------------------------------------------------------------- |
+| siteId        | string  | no       | Filter by site                                                 |
+| category      | string  | no       | One of: `performance`, `accessibility`, `bestPractices`, `seo` |
+| limit         | integer | no       | Issues to return, 1 to 100. Default 20                         |
+| offset        | integer | no       | Issues to skip. Use `pagination.nextOffset`. Default 0         |
+| pagesPerIssue | integer | no       | Worst pages to list per issue, 1 to 250. Default 10            |
 
 **Response:** `200`
 
@@ -646,6 +667,7 @@ widespread first).
       "auditId": "string",
       "title": "string",
       "category": "string",
+      "pageCount": 0,
       "pages": [
         {
           "pageId": "string",
@@ -656,18 +678,27 @@ widespread first).
         }
       ]
     }
-  ]
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "nextOffset": "number | null",
+    "total": 0
+  }
 }
 ```
 
 - `status` is `pending` while a sitemap hasn't been scraped yet or pages are
   waiting for their first audit. The issue list is incomplete until it's
   `ready`.
-- Issues sorted by number of affected pages (descending).
-- Pages within each issue sorted by score (ascending — worst scores first).
+- Issues sorted by number of affected pages (descending), then by audit ID.
+- `pageCount` is the number of pages that fail the audit. `pages` lists the
+  worst of them, sorted by score ascending, up to `pagesPerIssue`.
 - Scores range from `0` (fail) to `1` (pass).
+- `pagination.total` is the number of issues. `nextOffset` is `null` on the last
+  page.
 
-**Errors:** `400` invalid category.
+**Errors:** `400` invalid category, `limit`, `offset` or `pagesPerIssue`.
 
 ---
 

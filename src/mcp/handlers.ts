@@ -8,7 +8,7 @@ import { JobRunners } from '../services/job-runners'
 import { Pages } from '../services/pages'
 import { Sites } from '../services/sites'
 import { Teams } from '../services/teams'
-import { FoghornToolkit, ToolFailed, type PageSummary } from './tools'
+import { FoghornToolkit, ToolFailed } from './tools'
 
 // The MCP middleware provides `CurrentUser` per request. Tool handlers are
 // built once, so they read it with `serviceOption` instead of requiring it.
@@ -107,40 +107,28 @@ export const FoghornToolkitLive = FoghornToolkit.toLayer(
           })
         ),
 
-      list_issues: ({ category, siteId }) =>
+      list_issues: ({ category, limit, offset, pagesPerIssue, siteId }) =>
         asTool(
           Effect.gen(function* () {
             const userId = yield* currentUserId
 
-            return yield* issues.list({ category, siteId, userId })
+            return yield* issues.list({
+              category,
+              limit,
+              offset,
+              pagesPerIssue,
+              siteId,
+              userId
+            })
           })
         ),
 
-      list_pages: ({ search, siteId }) =>
+      list_pages: ({ limit, offset, search, siteId }) =>
         asTool(
           Effect.gen(function* () {
             const userId = yield* currentUserId
-            const pageList = yield* pages.list({ search, siteId, userId })
 
-            return {
-              pages: pageList.map(
-                (page): PageSummary => ({
-                  auditStatus: page.auditStatus,
-                  id: page.id,
-                  lastAuditedAt: page.lastAuditedAt,
-                  path: page.path,
-                  scores: page.auditReport
-                    ? {
-                        accessibility: page.auditReport.accessibility.score,
-                        bestPractices: page.auditReport.bestPractices.score,
-                        performance: page.auditReport.performance.score,
-                        seo: page.auditReport.seo.score
-                      }
-                    : null,
-                  url: page.url
-                })
-              )
-            }
+            return yield* pages.list({ limit, offset, search, siteId, userId })
           })
         ),
 

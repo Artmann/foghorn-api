@@ -114,6 +114,67 @@ export const IssueCategory = Schema.Literals([
 
 export type IssueCategory = typeof IssueCategory.Type
 
+// Pagination. Query strings are text, so the REST API decodes numbers from
+// strings. Tool arguments are JSON, so MCP tools take numbers.
+
+export const pageListLimit = { default: 50, maximum: 250 }
+export const issueListLimit = { default: 20, maximum: 100 }
+export const pagesPerIssueLimit = { default: 10, maximum: 250 }
+
+function rangeMessage(name: string, minimum: number, maximum: number) {
+  return `${name} must be a whole number from ${minimum} to ${maximum}.`
+}
+
+function wholeNumber(name: string, minimum: number, maximum: number) {
+  const message = rangeMessage(name, minimum, maximum)
+
+  return Schema.Int.annotate({ message }).check(
+    Schema.isBetween({ maximum, minimum }, { message })
+  )
+}
+
+function wholeNumberFromString(name: string, minimum: number, maximum: number) {
+  const message = rangeMessage(name, minimum, maximum)
+
+  return Schema.FiniteFromString.annotate({ message }).check(
+    Schema.isInt({ message }),
+    Schema.isBetween({ maximum, minimum }, { message })
+  )
+}
+
+const maximumOffset = 100_000
+
+export function paginationFields(
+  limit: { default: number; maximum: number },
+  { fromString }: { fromString: boolean }
+) {
+  const makeNumber = fromString ? wholeNumberFromString : wholeNumber
+
+  return {
+    limit: Schema.optional(
+      makeNumber('Limit', 1, limit.maximum).annotate({
+        description: `How many items to return. Defaults to ${limit.default}, at most ${limit.maximum}.`
+      })
+    ),
+    offset: Schema.optional(
+      makeNumber('Offset', 0, maximumOffset).annotate({
+        description:
+          'How many items to skip. Use `pagination.nextOffset` from the previous response to get the next page.'
+      })
+    )
+  }
+}
+
+export function pagesPerIssueField({ fromString }: { fromString: boolean }) {
+  const makeNumber = fromString ? wholeNumberFromString : wholeNumber
+
+  return Schema.optional(
+    makeNumber('Pages per issue', 1, pagesPerIssueLimit.maximum).annotate({
+      description: `How many affected pages to list per issue, worst first. Defaults to ${pagesPerIssueLimit.default}, at most ${pagesPerIssueLimit.maximum}. \`pageCount\` always has the full count.`
+    })
+  )
+}
+
 // Responses.
 
 const DateTimeString = Schema.String.annotate({
@@ -277,6 +338,53 @@ export const PageDto = Schema.Struct({
 
 export type PageDto = typeof PageDto.Type
 
+export const CategoryScores = Schema.Struct({
+  accessibility: Schema.NullOr(Schema.Number),
+  bestPractices: Schema.NullOr(Schema.Number),
+  performance: Schema.NullOr(Schema.Number),
+  seo: Schema.NullOr(Schema.Number)
+})
+
+export type CategoryScores = typeof CategoryScores.Type
+
+// A page without its audit report, for lists.
+export const PageSummaryDto = Schema.Struct({
+  auditError: PageDto.fields.auditError,
+  auditStatus: PageDto.fields.auditStatus,
+  createdAt: PageDto.fields.createdAt,
+  id: PageDto.fields.id,
+  lastAuditedAt: PageDto.fields.lastAuditedAt,
+  nextAuditAt: PageDto.fields.nextAuditAt,
+  path: PageDto.fields.path,
+  scores: Schema.NullOr(CategoryScores).annotate({
+    description:
+      'Lighthouse category scores from 0 to 1 from the last successful audit, or null if there is none.'
+  }),
+  siteId: PageDto.fields.siteId,
+  url: PageDto.fields.url
+})
+
+export type PageSummaryDto = typeof PageSummaryDto.Type
+
+export const PaginationDto = Schema.Struct({
+  limit: Schema.Number,
+  nextOffset: Schema.NullOr(Schema.Number).annotate({
+    description:
+      'The `offset` for the next page, or null when this is the last page.'
+  }),
+  offset: Schema.Number,
+  total: Schema.Number.annotate({
+    description: 'How many items there are in total.'
+  })
+})
+
+export type PaginationDto = typeof PaginationDto.Type
+
+export const PagesResponse = Schema.Struct({
+  pages: Schema.Array(PageSummaryDto),
+  pagination: PaginationDto
+})
+
 export const IssuePageDto = Schema.Struct({
   displayValue: Schema.NullOr(Schema.String),
   pageId: Schema.String,
@@ -288,7 +396,13 @@ export const IssuePageDto = Schema.Struct({
 export const IssueDto = Schema.Struct({
   auditId: Schema.String,
   category: IssueCategory,
-  pages: Schema.Array(IssuePageDto),
+  pageCount: Schema.Number.annotate({
+    description: 'How many pages fail this audit.'
+  }),
+  pages: Schema.Array(IssuePageDto).annotate({
+    description:
+      'The worst affected pages, up to `pagesPerIssue`. `pageCount` has the full count.'
+  }),
   title: Schema.String
 })
 
@@ -297,6 +411,7 @@ export type IssueDto = typeof IssueDto.Type
 export const IssuesResponse = Schema.Struct({
   audits: AuditProgressDto,
   issues: Schema.Array(IssueDto),
+  pagination: PaginationDto,
   status: Schema.Literals(['pending', 'ready']).annotate({
     description:
       '`pending` while a sitemap has not been scraped yet or pages are waiting for their first audit. The issue list is incomplete until it is `ready`.'

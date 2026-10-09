@@ -203,6 +203,7 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
       "auditId": "uses-responsive-images",
       "title": "Properly size images",
       "category": "performance",
+      "pageCount": 23,
       "pages": [
         {
           "pageId": "page-id",
@@ -213,7 +214,8 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
         }
       ]
     }
-  ]
+  ],
+  "pagination": { "limit": 20, "offset": 0, "nextOffset": 20, "total": 41 }
 }
 ```
 
@@ -221,8 +223,18 @@ curl -s "https://foghorn-api.artgaard.workers.dev/issues?siteId=SITE_ID&category
   being audited. Say so when you report the issues, and include the progress
   from `audits`.
 - Issues are sorted by number of affected pages (most widespread first).
-- Pages within each issue are sorted by score ascending (worst first).
+- `pageCount` is how many pages fail the audit. `pages` lists only the worst of
+  them, sorted by score ascending (up to `pagesPerIssue`, default 10). To list
+  every affected page of a site, pass `siteId` and `pagesPerIssue=250`.
 - Scores range from 0 (fail) to 1 (pass).
+
+### Pagination
+
+`/issues` returns 20 issues by default (`limit`, at most 100) and `/pages`
+returns 50 pages (at most 250). When `pagination.nextOffset` is not `null`,
+there are more. Request the next page with `offset=<nextOffset>`. Usually the
+first page of issues is enough to report the biggest problems. Only fetch more
+when the user asks for everything.
 
 ## Searching Pages
 
@@ -232,6 +244,9 @@ Find specific pages by URL or path. The search is a case-insensitive text match:
 curl -s "https://foghorn-api.artgaard.workers.dev/pages?siteId=SITE_ID&search=blog" \
   -H "$AUTH"
 ```
+
+Page lists include each page's category `scores` but not the audit report. Use
+`GET /pages/:id` for the full report of one page.
 
 ## Handling Errors
 
@@ -248,30 +263,30 @@ Branch on `code` and show `message` to the user; it says what to do next.
 
 ## Quick Reference
 
-| Method | Path                         | Purpose                                         |
-| ------ | ---------------------------- | ----------------------------------------------- |
-| GET    | `/`                          | Health check                                    |
-| POST   | `/auth/sign-up`              | Create account                                  |
-| POST   | `/auth/sign-in`              | Get JWT token                                   |
-| POST   | `/api-keys`                  | Create API key                                  |
-| GET    | `/api-keys`                  | List API keys                                   |
-| DELETE | `/api-keys/:id`              | Delete API key                                  |
-| POST   | `/teams`                     | Create team                                     |
-| GET    | `/teams`                     | List teams                                      |
-| GET    | `/teams/:id`                 | Get team                                        |
-| PUT    | `/teams/:id`                 | Update team                                     |
-| DELETE | `/teams/:id`                 | Delete team                                     |
-| POST   | `/teams/:id/members`         | Add member                                      |
-| GET    | `/teams/:id/members`         | List members                                    |
-| DELETE | `/teams/:id/members/:userId` | Remove member                                   |
-| POST   | `/sites`                     | Add site                                        |
-| GET    | `/sites`                     | List sites (optional `?teamId=`)                |
-| GET    | `/sites/:id`                 | Get site                                        |
-| PUT    | `/sites/:id`                 | Update site                                     |
-| DELETE | `/sites/:id`                 | Delete site                                     |
-| GET    | `/pages`                     | List pages (optional `?siteId=`, `?search=`)    |
-| GET    | `/pages/:id`                 | Get page with audit report                      |
-| GET    | `/issues`                    | List issues (optional `?siteId=`, `?category=`) |
+| Method | Path                         | Purpose                                       |
+| ------ | ---------------------------- | --------------------------------------------- |
+| GET    | `/`                          | Health check                                  |
+| POST   | `/auth/sign-up`              | Create account                                |
+| POST   | `/auth/sign-in`              | Get JWT token                                 |
+| POST   | `/api-keys`                  | Create API key                                |
+| GET    | `/api-keys`                  | List API keys                                 |
+| DELETE | `/api-keys/:id`              | Delete API key                                |
+| POST   | `/teams`                     | Create team                                   |
+| GET    | `/teams`                     | List teams                                    |
+| GET    | `/teams/:id`                 | Get team                                      |
+| PUT    | `/teams/:id`                 | Update team                                   |
+| DELETE | `/teams/:id`                 | Delete team                                   |
+| POST   | `/teams/:id/members`         | Add member                                    |
+| GET    | `/teams/:id/members`         | List members                                  |
+| DELETE | `/teams/:id/members/:userId` | Remove member                                 |
+| POST   | `/sites`                     | Add site                                      |
+| GET    | `/sites`                     | List sites (optional `?teamId=`)              |
+| GET    | `/sites/:id`                 | Get site                                      |
+| PUT    | `/sites/:id`                 | Update site                                   |
+| DELETE | `/sites/:id`                 | Delete site                                   |
+| GET    | `/pages`                     | List pages (`?siteId=`, `?search=`, paged)    |
+| GET    | `/pages/:id`                 | Get page with audit report                    |
+| GET    | `/issues`                    | List issues (`?siteId=`, `?category=`, paged) |
 
 See [references/api-reference.md](references/api-reference.md) for full
 request/response schemas.

@@ -540,6 +540,7 @@ describe('GET /issues status', () => {
         totalPages: 0
       },
       issues: [],
+      pagination: { limit: 20, nextOffset: null, offset: 0, total: 0 },
       status: 'pending'
     })
   })
@@ -568,6 +569,7 @@ describe('GET /issues status', () => {
         totalPages: 2
       },
       issues: [],
+      pagination: { limit: 20, nextOffset: null, offset: 0, total: 0 },
       status: 'pending'
     })
   })
@@ -595,7 +597,160 @@ describe('GET /issues status', () => {
         totalPages: 1
       },
       issues: [],
+      pagination: { limit: 20, nextOffset: null, offset: 0, total: 0 },
       status: 'ready'
     })
+  })
+})
+
+describe('GET /issues pagination', () => {
+  async function setupFailingAudits() {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+    const team = await createTestTeam(user.id)
+    const site = await createTestSite(team.id)
+    const scores = [0.9, 0.1, 0.5]
+
+    // Every page fails `color-contrast`. Only the first fails `image-alt`
+    // and `label`.
+    for (const [index, score] of scores.entries()) {
+      const page = await createTestPage(site.id, {
+        path: `/page-${index}`,
+        url: `https://example.com/page-${index}`
+      })
+      const audits = [{ id: 'color-contrast', title: 'Color Contrast', score }]
+
+      if (index === 0) {
+        audits.push(
+          { id: 'image-alt', title: 'Image Alt', score: 0 },
+          { id: 'label', title: 'Label', score: 0 }
+        )
+      }
+
+      await setAuditReport(
+        page,
+        makeAuditReport({ accessibility: { audits, score } })
+      )
+    }
+
+    return { site, token }
+  }
+
+  it('lists the worst pages of each issue with the full count', async () => {
+    const { site, token } = await setupFailingAudits()
+
+    const response = await authenticatedRequest(
+      `/issues?siteId=${site.id}&limit=1&pagesPerIssue=2`,
+      { token }
+    )
+    const body = (await response.json()) as IssueResponse
+
+    expect(response.status).toEqual(200)
+    expect(body.issues).toEqual([
+      {
+        auditId: 'color-contrast',
+        category: 'accessibility',
+        pageCount: 3,
+        pages: [
+          {
+            displayValue: null,
+            pageId: expect.any(String),
+            path: '/page-1',
+            score: 0.1,
+            url: 'https://example.com/page-1'
+          },
+          {
+            displayValue: null,
+            pageId: expect.any(String),
+            path: '/page-2',
+            score: 0.5,
+            url: 'https://example.com/page-2'
+          }
+        ],
+        title: 'Color Contrast'
+      }
+    ])
+  })
+
+  it('pages through issues with limit and offset', async () => {
+    const { site, token } = await setupFailingAudits()
+
+    const first = await authenticatedRequest(
+      `/issues?siteId=${site.id}&limit=2`,
+      { token }
+    )
+    const second = await authenticatedRequest(
+      `/issues?siteId=${site.id}&limit=2&offset=2`,
+      { token }
+    )
+    const firstBody = (await first.json()) as IssueResponse & {
+      pagination: unknown
+    }
+    const secondBody = (await second.json()) as IssueResponse & {
+      pagination: unknown
+    }
+
+    // Issues with the same page count are sorted by audit ID.
+    expect(firstBody.issues.map((issue) => issue.auditId)).toEqual([
+      'color-contrast',
+      'image-alt'
+    ])
+    expect(firstBody.pagination).toEqual({
+      limit: 2,
+      nextOffset: 2,
+      offset: 0,
+      total: 3
+    })
+    expect(secondBody.issues.map((issue) => issue.auditId)).toEqual(['label'])
+    expect(secondBody.pagination).toEqual({
+      limit: 2,
+      nextOffset: null,
+      offset: 2,
+      total: 3
+    })
+  })
+
+  it('rejects a limit outside the allowed range', async () => {
+    const { user } = await createTestUser()
+    const token = await createAuthToken(user.id, user.email)
+
+    const responses = await Promise.all([
+      authenticatedRequest('/issues?limit=0', { token }),
+      authenticatedRequest('/issues?limit=101', { token }),
+      authenticatedRequest('/issues?limit=ten', { token }),
+      authenticatedRequest('/issues?pagesPerIssue=1.5', { token })
+    ])
+
+    expect(responses.map((response) => response.status)).toEqual([
+      400, 400, 400, 400
+    ])
+    expect(
+      await Promise.all(responses.map((response) => response.json()))
+    ).toEqual([
+      {
+        error: {
+          code: 'ValidationFailed',
+          message: 'Limit must be a whole number from 1 to 100.'
+        }
+      },
+      {
+        error: {
+          code: 'ValidationFailed',
+          message: 'Limit must be a whole number from 1 to 100.'
+        }
+      },
+      {
+        error: {
+          code: 'ValidationFailed',
+          message: 'Limit must be a whole number from 1 to 100.'
+        }
+      },
+      {
+        error: {
+          code: 'ValidationFailed',
+          message: 'Pages per issue must be a whole number from 1 to 250.'
+        }
+      }
+    ])
   })
 })

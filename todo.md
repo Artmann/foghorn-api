@@ -46,9 +46,6 @@
 - [ ] Raise the PBKDF2 iterations for passwords from 10,000 to 100,000 (the most
       Workers allows). Store the iteration count per user so existing hashes
       keep working, and rehash on the next sign-in.
-- [ ] Add pagination to `GET /pages` and `GET /issues`. Today they load every
-      page and full audit report into memory.
-- [ ] Use a projection so list endpoints don't return full audit reports.
 - [ ] Replace the in-memory rate limiter. It's per isolate on Workers, so the
       limit isn't enforced. Use Cloudflare's rate limiting binding or a Durable
       Object.
@@ -135,3 +132,7 @@
       share sockets and fail.
 - [x] Fix Worker request logs, which skipped the JSON and Axiom loggers and
       ignored `LOG_LEVEL`.
+- [x] Pagination for `GET /pages` and `GET /issues` (and the MCP tools). Page
+      lists return scores instead of audit reports. Issues are built by
+      streaming pages with a projection and keep only the worst pages per issue,
+      so memory stays bounded.
