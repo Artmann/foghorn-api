@@ -118,10 +118,19 @@ skills/lighthouse-audit/ # Agent skill for using the API
 
 ### Passwords
 
-- PBKDF2 with SHA-256 and 10,000 iterations (see the todo list; this should go
-  up)
+- PBKDF2 with SHA-256 and 10,000 iterations. Raising it is blocked on the
+  Workers plan (see the todo list).
 - Unique 16-byte salt per user
 - Timing-safe comparison
+
+### Rate Limits
+
+- Per IP and route prefix, through the `RateLimiter` service
+  (`src/services/rate-limiter.ts`). On Workers it uses the rate limiting
+  bindings in `wrangler.jsonc`, which count per Cloudflare location. Keep their
+  limits in sync with `rateLimitRules`.
+- Without a binding (tests, the binding failing), requests are counted in memory
+  per isolate.
 
 ### API Keys
 

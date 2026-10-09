@@ -4,6 +4,26 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-02-16",
   "compatibility_flags": ["nodejs_compat"],
+  // Keep the limits in sync with `rateLimitRules` in
+  // `src/services/rate-limiter.ts`. `period` is in seconds and must be 10 or
+  // 60. `namespace_id` must be unique within the Cloudflare account.
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "MCP_RATE_LIMITER",
+      "namespace_id": "1003",
+      "simple": { "limit": 120, "period": 60 }
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "production",
     "LOG_LEVEL": "info"

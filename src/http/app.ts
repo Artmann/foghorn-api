@@ -11,6 +11,7 @@ import { JobQueue } from '../services/job-queue'
 import { JobRunners } from '../services/job-runners'
 import { LoggingLive } from '../services/logging'
 import { Pages } from '../services/pages'
+import { RateLimiter } from '../services/rate-limiter'
 import { Sites } from '../services/sites'
 import { Teams } from '../services/teams'
 import { Users } from '../services/users'
@@ -51,7 +52,11 @@ export function makeApp(env: Record<string, unknown>) {
   const ConfigLive = ConfigProvider.layer(ConfigProvider.fromUnknown(env))
 
   return HttpRouter.toWebHandler(
-    AppLive.pipe(Layer.provideMerge(LoggingLive), Layer.provide(ConfigLive)),
+    AppLive.pipe(
+      Layer.provide(RateLimiter.layer(env)),
+      Layer.provideMerge(LoggingLive),
+      Layer.provide(ConfigLive)
+    ),
     { disableLogger: true }
   )
 }

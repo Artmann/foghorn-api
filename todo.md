@@ -45,10 +45,9 @@
 
 - [ ] Raise the PBKDF2 iterations for passwords from 10,000 to 100,000 (the most
       Workers allows). Store the iteration count per user so existing hashes
-      keep working, and rehash on the next sign-in.
-- [ ] Replace the in-memory rate limiter. It's per isolate on Workers, so the
-      limit isn't enforced. Use Cloudflare's rate limiting binding or a Durable
-      Object.
+      keep working, and rehash on the next sign-in. Blocked on the Workers plan:
+      100,000 iterations take about 15 ms of CPU, and the free plan allows 10 ms
+      per request.
 - [ ] Verify domain ownership before auditing (DNS TXT record or a file at
       `/.well-known/foghorn.txt`). Today anyone can add any domain and spend our
       PageSpeed quota.
@@ -107,7 +106,8 @@
 - [x] Limit the amount of pages scraped per site to 250.
 - [x] Limit the number of sites per team to 10.
 - [x] Limit the number of teams per user to 5.
-- [x] Add rate limits to the API (per isolate, see Hardening).
+- [x] Add rate limits to the API, counted by Cloudflare's rate limiting binding
+      per location (in memory when the binding is missing).
 - [x] Docker job runner (`docker compose up`) that loops over sitemap scrapes
       and audits, with a clean shutdown.
 - [x] 4-hour cooldown for sitemap scrapes and audits.

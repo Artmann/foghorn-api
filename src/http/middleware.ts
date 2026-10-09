@@ -7,16 +7,21 @@ import {
 } from 'effect/http'
 import { HttpApiError } from 'effect/http-api'
 
-import { checkRateLimit, type RateLimit } from '../lib/rate-limit'
+import {
+  RateLimiter,
+  type RateLimiterShape,
+  type RateLimitRule
+} from '../services/rate-limiter'
 
-const rateLimits: { limit: RateLimit; prefix: string }[] = [
-  { limit: { max: 10, windowMs: 60_000 }, prefix: '/auth' },
-  { limit: { max: 60, windowMs: 60_000 }, prefix: '/api-keys' },
-  { limit: { max: 60, windowMs: 60_000 }, prefix: '/issues' },
-  { limit: { max: 120, windowMs: 60_000 }, prefix: '/mcp' },
-  { limit: { max: 60, windowMs: 60_000 }, prefix: '/pages' },
-  { limit: { max: 60, windowMs: 60_000 }, prefix: '/sites' },
-  { limit: { max: 60, windowMs: 60_000 }, prefix: '/teams' }
+// Each prefix is counted on its own, with the limits of its rule.
+const rateLimitedRoutes: { prefix: string; rule: RateLimitRule }[] = [
+  { prefix: '/api-keys', rule: 'api' },
+  { prefix: '/auth', rule: 'auth' },
+  { prefix: '/issues', rule: 'api' },
+  { prefix: '/mcp', rule: 'mcp' },
+  { prefix: '/pages', rule: 'api' },
+  { prefix: '/sites', rule: 'api' },
+  { prefix: '/teams', rule: 'api' }
 ]
 
 // The same defaults as Hono's `secureHeaders()`, which the API used before.
@@ -64,20 +69,20 @@ function formatValidationError(error: HttpApiError.HttpApiSchemaError) {
 
 // Rejects requests over the per-IP limit for their route prefix.
 const rateLimit = <E, R>(
+  rateLimiter: RateLimiterShape,
   httpEffect: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>
 ) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const path = getPath(request)
-    const rule = rateLimits.find(
+    const route = rateLimitedRoutes.find(
       ({ prefix }) => path === prefix || path.startsWith(`${prefix}/`)
     )
 
-    if (rule) {
-      const result = checkRateLimit(
-        `${getClientIp(request)}:${rule.prefix}`,
-        rule.limit,
-        yield* Clock.currentTimeMillis
+    if (route) {
+      const result = yield* rateLimiter.check(
+        route.rule,
+        `${getClientIp(request)}:${route.prefix}`
       )
 
       if (!result.allowed) {
@@ -194,7 +199,15 @@ const addSecurityHeaders = <E, R>(
 ) => Effect.map(httpEffect, HttpServerResponse.setHeaders(securityHeaders))
 
 export const AppMiddleware = HttpRouter.middleware(
-  (httpEffect) =>
-    httpEffect.pipe(rateLimit, handleErrors, logRequest, addSecurityHeaders),
+  Effect.gen(function* () {
+    const rateLimiter = yield* RateLimiter
+
+    return (httpEffect) =>
+      rateLimit(rateLimiter, httpEffect).pipe(
+        handleErrors,
+        logRequest,
+        addSecurityHeaders
+      )
+  }),
   { global: true }
 )

@@ -714,3 +714,8 @@ Per-IP rate limits apply to all routes:
 | `/pages/*`    | 60       | 60 seconds |
 | `/issues/*`   | 60       | 60 seconds |
 | `/api-keys/*` | 60       | 60 seconds |
+| `/mcp`        | 120      | 60 seconds |
+
+Over the limit, the API answers `429` with a `RateLimited` error and a
+`Retry-After` header. Limits are counted per Cloudflare location, so treat them
+as approximate.
