@@ -1,6 +1,7 @@
 import { Context } from 'effect'
 
 import { makeApp } from './http/app'
+import { wantsLandingPage } from './http/landing-page'
 import { DatabaseConnection, makeDatabaseConnection } from './services/database'
 import { flushLogs } from './services/logging'
 import type { CloudflareBindings } from './types/env'
@@ -15,6 +16,10 @@ export default {
     env: CloudflareBindings,
     context: ExecutionContext
   ): Promise<Response> {
+    if (env.ASSETS && wantsLandingPage(request)) {
+      return env.ASSETS.fetch(request)
+    }
+
     app ??= makeApp({ ...env })
 
     // Workers can't reuse a socket across requests, so each request opens its

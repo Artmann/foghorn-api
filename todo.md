@@ -10,6 +10,8 @@
       250 pages take and whether 5 workers hit PageSpeed's quota.
 - [ ] Delete the unused `INTERNAL_API_KEY` secret:
       `bunx wrangler secret delete INTERNAL_API_KEY`.
+- [ ] Set the GA4 `measurementId` in `public/consent.js`. Analytics stays off
+      until it's set.
 - [ ] Stop tracking `.claude/settings.local.json`. It's a personal file and
       contains an old local JWT.
 

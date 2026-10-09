@@ -4,6 +4,14 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-02-16",
   "compatibility_flags": ["nodejs_compat"],
+  // The landing page. Files in `public/` are served as they are, except `/`,
+  // which goes to the Worker so it can answer API clients with the health
+  // check and browsers with `index.html`.
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+    "run_worker_first": ["/"]
+  },
   // Keep the limits in sync with `rateLimitRules` in
   // `src/services/rate-limiter.ts`. `period` is in seconds and must be 10 or
   // 60. `namespace_id` must be unique within the Cloudflare account.

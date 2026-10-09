@@ -63,7 +63,24 @@ src/
   lib/                   # Pure helpers: job status, JWT, crypto, issues, ...
   models/                # Esix models and DTO helpers
 skills/lighthouse-audit/ # Agent skill for using the API
+public/                  # Landing page, served as Worker static assets
 ```
+
+## Landing Page
+
+- `public/index.html` is a single static page, with no build step. Files in
+  `public/` are served as they are. `GET /` runs the Worker first:
+  `src/http/landing-page.ts` sends browsers (`Accept: text/html`) to the page
+  and everyone else to the JSON health check.
+- Security headers for the page live in `public/_headers`. Keep the CSP in sync
+  when adding scripts or third-party requests.
+- The cookie banner is vanilla-cookieconsent 3.1.0, vendored in
+  `public/vendor/`. `public/consent.js` sets Google Consent Mode v2 to denied
+  and only loads Google Analytics after a visitor accepts. Set `measurementId`
+  there to turn GA on. The banner hides itself from automated browsers
+  (`hideFromBots`), so pass `hideFromBots: false` when testing it with
+  Playwright.
+- When the API or MCP tools change in ways the page describes, update it too.
 
 ## MCP Server
 

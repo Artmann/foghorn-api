@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <title>Foghorn: Lighthouse for every page, built for agents</title>
+    <meta
+      name="description"
+      content="Foghorn reads your sitemap, runs Lighthouse on every page and groups the failing audits into issues. Connect your agent over MCP and ask what to fix."
+    />
+    <meta
+      name="color-scheme"
+      content="light dark"
+    />
+    <meta
+      property="og:title"
+      content="Foghorn"
+    />
+    <meta
+      property="og:description"
+      content="Lighthouse for every page on your site, built for agents."
+    />
+    <meta
+      property="og:type"
+      content="website"
+    />
+    <link
+      rel="icon"
+      href="/favicon.svg"
+      type="image/svg+xml"
+    />
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="stylesheet"
+      href="/vendor/cookieconsent.css"
+    />
+    <link
+      rel="stylesheet"
+      href="/styles.css"
+    />
+    <script
+      src="/vendor/cookieconsent.umd.js"
+      defer
+    ></script>
+    <script
+      src="/consent.js"
+      defer
+    ></script>
+    <script
+      src="/site.js"
+      defer
+    ></script>
+  </head>
+  <body>
+    <a
+      class="skip"
+      href="#main"
+      >Skip to content</a
+    >
+
+    <header class="top">
+      <div class="wrap top-inner">
+        <a
+          class="logo"
+          href="#"
+          aria-label="Foghorn home"
+        >
+          <span
+            class="logo-mark"
+            aria-hidden="true"
+            >◢</span
+          >foghorn<span
+            class="cursor"
+            aria-hidden="true"
+            >_</span
+          >
+        </a>
+        <nav
+          class="nav"
+          aria-label="Sections"
+        >
+          <a href="#problem">problem</a>
+          <a href="#start">start</a>
+          <a href="#features">features</a>
+          <a href="#agents">agents</a>
+          <a href="https://github.com/artmann/foghorn-api">github ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap">
+        <p class="eyebrow">
+          <span
+            class="dot"
+            aria-hidden="true"
+          ></span>
+          lighthouse · every page · over mcp
+        </p>
+        <h1>
+          Lighthouse for every page on your site.<br />
+          <span class="accent">Built for agents.</span>
+        </h1>
+        <p class="lede">
+          Foghorn reads your sitemap, audits every page for performance,
+          accessibility, best practices and SEO, and groups what fails into a
+          ranked list of issues. Your agent asks what to fix, fixes it, and
+          checks again.
+        </p>
+
+        <div class="hero-actions">
+          <a
+            class="button button-primary"
+            href="#start"
+            >Get started →</a
+          >
+          <a
+            class="button"
+            href="#agents"
+            >Connect an agent</a
+          >
+        </div>
+
+        <figure
+          class="terminal"
+          aria-label="Example: asking an agent about a site"
+        >
+          <div class="terminal-bar">
+            <span></span><span></span><span></span>
+            <em>claude · foghorn mcp</em>
+          </div>
+          <pre><code><span class="prompt">&gt;</span> what's hurting www.example.com the most?
+
+<span class="muted">● foghorn · list_issues(siteId: "6650…", category: "performance")</span>
+
+  status   <span class="ok">ready</span>  248 / 248 pages audited
+
+  ISSUE                        PAGES   WORST
+  render-blocking-resources      212    0.21
+  unused-javascript              187    0.34
+  uses-responsive-images          96    0.40
+  largest-contentful-paint        71    0.18
+
+Render-blocking CSS affects 212 of 248 pages. It comes from
+the font stylesheet in the shared layout, so one change fixes
+all of them. Want me to inline the critical CSS?</code></pre>
+        </figure>
+      </section>
+
+      <section
+        id="problem"
+        class="section wrap"
+      >
+        <header class="section-head">
+          <span class="number">[01]</span>
+          <h2>The problem</h2>
+        </header>
+        <div class="columns">
+          <div>
+            <p class="big">
+              Lighthouse checks one URL at a time. Your site has hundreds.
+            </p>
+            <p>
+              You run PageSpeed on the home page, it looks fine, and you move
+              on. Meanwhile a blog template ships a 2&nbsp;MB hero image, a
+              product page loses its alt text, and a marketing page pulls in
+              three tag managers. Nobody audits page 137 by hand.
+            </p>
+            <p>
+              Agents have the same blind spot. They can fix code, but they can't
+              see how the site performs, so they can't tell what to fix first or
+              whether a change helped.
+            </p>
+          </div>
+          <table class="compare">
+            <caption class="sr-only">
+              PageSpeed Insights compared with Foghorn
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col"></th>
+                <th scope="col">pagespeed</th>
+                <th scope="col">foghorn</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">pages</th>
+                <td>1 url</td>
+                <td>whole sitemap</td>
+              </tr>
+              <tr>
+                <th scope="row">runs</th>
+                <td>when you remember</td>
+                <td>every 4 hours</td>
+              </tr>
+              <tr>
+                <th scope="row">output</th>
+                <td>one report</td>
+                <td>issues, ranked by pages hit</td>
+              </tr>
+              <tr>
+                <th scope="row">for agents</th>
+                <td>—</td>
+                <td>mcp + rest api</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section
+        id="start"
+        class="section wrap"
+      >
+        <header class="section-head">
+          <span class="number">[02]</span>
+          <h2>Get started</h2>
+        </header>
+        <p class="intro">
+          There's no dashboard. You create an account and an API key with
+          <code>curl</code>, and your agent does the rest.
+        </p>
+
+        <ol class="steps">
+          <li>
+            <h3><span class="step">01</span> Create an account</h3>
+            <pre
+              data-copy
+            ><code>curl -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-up \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "a-long-password"}'</code></pre>
+          </li>
+          <li>
+            <h3><span class="step">02</span> Sign in to get a token</h3>
+            <pre
+              data-copy
+            ><code>curl -X POST https://foghorn-api.artgaard.workers.dev/auth/sign-in \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "a-long-password"}'</code></pre>
+            <p class="note">
+              Returns a <code>token</code> that is valid for 24 hours.
+            </p>
+          </li>
+          <li>
+            <h3><span class="step">03</span> Create an API key</h3>
+            <pre
+              data-copy
+            ><code>curl -X POST https://foghorn-api.artgaard.workers.dev/api-keys \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My agent"}'</code></pre>
+            <p class="note">
+              The <code>key</code> starts with <code>fh_</code> and is shown
+              once. Keep it somewhere safe.
+            </p>
+          </li>
+          <li>
+            <h3><span class="step">04</span> Hand it to your agent</h3>
+            <p>
+              Connect over MCP (see <a href="#agents">[04]</a>) and say
+              <em>"Add www.example.com to Foghorn"</em>. It creates a team, adds
+              the site, and the audits start.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section
+        id="features"
+        class="section wrap"
+      >
+        <header class="section-head">
+          <span class="number">[03]</span>
+          <h2>What it does</h2>
+        </header>
+
+        <pre
+          class="diagram"
+          aria-label="sitemap.xml, then pages, then Lighthouse, then issues"
+        ><code>  sitemap.xml ──▶  pages  ──▶  lighthouse  ──▶  issues
+  ───────────      ─────       ──────────       ──────
+  read & synced    ≤ 250       mobile, all      grouped by audit,
+  every 4 hours    per site    4 categories     ranked by pages hit</code></pre>
+
+        <ul class="grid">
+          <li>
+            <h3>Crawls the sitemap</h3>
+            <p>
+              Add a domain and Foghorn reads its sitemap, including sitemap
+              indexes. Pages that drop out of the sitemap are removed.
+            </p>
+          </li>
+          <li>
+            <h3>Audits every page</h3>
+            <p>
+              Each page gets a full Lighthouse run through PageSpeed Insights:
+              performance, accessibility, best practices and SEO.
+            </p>
+          </li>
+          <li>
+            <h3>Groups the failures</h3>
+            <p>
+              Failing audits become issues, sorted by how many pages they hit,
+              with the worst pages for each. Fix the template, not the page.
+            </p>
+          </li>
+          <li>
+            <h3>Keeps checking</h3>
+            <p>
+              Sitemaps and pages are checked again every 4 hours, so the scores
+              follow your deploys.
+            </p>
+          </li>
+          <li>
+            <h3>Shows what's pending</h3>
+            <p>
+              Sites, pages and issues report <code>pending</code>,
+              <code>running</code>, <code>completed</code> or
+              <code>failed</code>, so an agent knows when to wait.
+            </p>
+          </li>
+          <li>
+            <h3>REST, OpenAPI, MCP</h3>
+            <p>
+              The same data over a REST API with an
+              <a href="/openapi">OpenAPI spec</a>, a remote MCP server, and an
+              agent skill.
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <section
+        id="agents"
+        class="section wrap"
+      >
+        <header class="section-head">
+          <span class="number">[04]</span>
+          <h2>Connect your agent</h2>
+        </header>
+        <p class="intro">
+          Foghorn is a remote MCP server at
+          <code>https://foghorn-api.artgaard.workers.dev/mcp</code>. Use your
+          API key as a bearer token.
+        </p>
+
+        <div
+          class="tabs"
+          data-tabs
+        >
+          <div
+            class="tab-list"
+            role="tablist"
+            aria-label="Agent"
+          >
+            <button
+              type="button"
+              role="tab"
+              id="tab-claude"
+              aria-controls="panel-claude"
+              aria-selected="true"
+            >
+              claude code
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-json"
+              aria-controls="panel-json"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              cursor &amp; others
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-skill"
+              aria-controls="panel-skill"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              agent skill
+            </button>
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-claude"
+            aria-labelledby="tab-claude"
+          >
+            <pre data-copy><code>claude mcp add --transport http foghorn \
+  https://foghorn-api.artgaard.workers.dev/mcp \
+  --header "Authorization: Bearer fh_..."</code></pre>
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-json"
+            aria-labelledby="tab-json"
+            hidden
+          >
+            <pre data-copy><code>{
+  "mcpServers": {
+    "foghorn": {
+      "type": "http",
+      "url": "https://foghorn-api.artgaard.workers.dev/mcp",
+      "headers": { "Authorization": "Bearer fh_..." }
+    }
+  }
+}</code></pre>
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-skill"
+            aria-labelledby="tab-skill"
+            hidden
+          >
+            <pre
+              data-copy
+            ><code>npx skills add https://github.com/artmann/foghorn-api</code></pre>
+            <p class="note">
+              For agents without MCP. The skill teaches them the REST API.
+            </p>
+          </div>
+        </div>
+
+        <div class="columns">
+          <div>
+            <h3 class="label">Things to ask</h3>
+            <ul class="prompts">
+              <li>
+                "Add www.example.com to Foghorn and tell me when it's done."
+              </li>
+              <li>"Which accessibility issues affect the most pages?"</li>
+              <li>"Show me the five slowest pages and why they're slow."</li>
+              <li>"Fix the top SEO issue, then check the pages again."</li>
+              <li>"Is anything still pending on my site?"</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="label">Tools</h3>
+            <table class="tools">
+              <tbody>
+                <tr>
+                  <td><code>add_site</code></td>
+                  <td>Start crawling and auditing a domain</td>
+                </tr>
+                <tr>
+                  <td><code>get_site</code></td>
+                  <td>Status and audit progress</td>
+                </tr>
+                <tr>
+                  <td><code>list_issues</code></td>
+                  <td>Failing audits, most widespread first</td>
+                </tr>
+                <tr>
+                  <td><code>list_pages</code></td>
+                  <td>Pages with their four scores</td>
+                </tr>
+                <tr>
+                  <td><code>get_page</code></td>
+                  <td>The full Lighthouse report for a page</td>
+                </tr>
+                <tr>
+                  <td><code>list_teams</code></td>
+                  <td>Plus teams, sites and service status</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p class="note tracking">
+          <span class="accent">→</span> Tracking performance: every page is
+          audited again every 4 hours. Ask after a deploy and your agent sees
+          the new scores. Score history and regression alerts are next on the
+          list.
+        </p>
+      </section>
+
+      <section class="cta wrap">
+        <pre aria-hidden="true"><code>$ foghorn --every-page</code></pre>
+        <p>Stop guessing which page is slow.</p>
+        <a
+          class="button button-primary"
+          href="#start"
+          >Get started →</a
+        >
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <span>© Foghorn</span>
+        <nav aria-label="Footer">
+          <a href="https://github.com/artmann/foghorn-api">github</a>
+          <a href="/openapi">openapi</a>
+          <button
+            type="button"
+            class="link"
+            data-cc="show-preferencesModal"
+          >
+            cookie settings
+          </button>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
